@@ -3,6 +3,11 @@ package io.github.alight77.news.ui
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -10,11 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -31,6 +37,7 @@ import io.github.alight77.news.ui.favorites.FavoritesScreen
 import io.github.alight77.news.ui.home.HomeScreen
 import io.github.alight77.news.ui.home.HomeViewModel
 import io.github.alight77.news.ui.search.SearchScreen
+import io.github.alight77.news.ui.theme.NewsTheme
 
 @Composable
 fun NewsApp(repository: NewsRepository) {
@@ -42,13 +49,16 @@ fun NewsApp(repository: NewsRepository) {
     })
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val selectedDestination = bottomNavigationItems.firstOrNull { item ->
+        currentDestination?.hierarchy?.any { it.route == item.destination.route } == true
+    }?.destination
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (currentDestination?.route != NewsDestination.Detail.route) {
                 NewsBottomNavigation(
-                    currentDestination = currentDestination,
+                    selectedDestination = selectedDestination,
                     onDestinationSelected = { destination ->
                         navController.navigate(destination.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
@@ -100,35 +110,50 @@ fun NewsApp(repository: NewsRepository) {
 
 @Composable
 private fun NewsBottomNavigation(
-    currentDestination: NavDestination?,
+    selectedDestination: NewsDestination?,
     onDestinationSelected: (NewsDestination) -> Unit,
 ) {
     NavigationBar {
-        NewsDestination.topLevel.forEach { destination ->
-            val selected = currentDestination?.hierarchy?.any {
-                it.route == destination.route
-            } == true
+        bottomNavigationItems.forEach { item ->
+            val selected = selectedDestination == item.destination
             NavigationBarItem(
                 selected = selected,
-                onClick = { onDestinationSelected(destination) },
-                icon = { Text(destination.marker) },
-                label = { Text(stringResource(destination.labelRes)) },
+                onClick = { onDestinationSelected(item.destination) },
+                icon = { Icon(item.icon, contentDescription = null) },
+                label = { Text(stringResource(item.destination.labelRes)) },
             )
         }
     }
 }
 
+@Preview(name = "Bottom navigation", showBackground = true)
+@Composable
+private fun NewsBottomNavigationPreview() {
+    NewsTheme(dynamicColor = false) {
+        NewsBottomNavigation(
+            selectedDestination = NewsDestination.Home,
+            onDestinationSelected = {},
+        )
+    }
+}
+
+private data class BottomNavigationItem(
+    val destination: NewsDestination,
+    val icon: ImageVector,
+)
+
+private val bottomNavigationItems = listOf(
+    BottomNavigationItem(NewsDestination.Home, Icons.Filled.Home),
+    BottomNavigationItem(NewsDestination.Search, Icons.Filled.Search),
+    BottomNavigationItem(NewsDestination.Favorites, Icons.Filled.Favorite),
+)
+
 private sealed class NewsDestination(
     val route: String,
     @param:StringRes val labelRes: Int,
-    val marker: String,
 ) {
-    data object Home : NewsDestination("home", R.string.nav_home, "首")
-    data object Search : NewsDestination("search", R.string.nav_search, "搜")
-    data object Favorites : NewsDestination("favorites", R.string.nav_favorites, "藏")
-    data object Detail : NewsDestination("article_detail/{articleId}", R.string.detail_title, "")
-
-    companion object {
-        val topLevel = listOf(Home, Search, Favorites)
-    }
+    data object Home : NewsDestination("home", R.string.nav_home)
+    data object Search : NewsDestination("search", R.string.nav_search)
+    data object Favorites : NewsDestination("favorites", R.string.nav_favorites)
+    data object Detail : NewsDestination("article_detail/{articleId}", R.string.detail_title)
 }
