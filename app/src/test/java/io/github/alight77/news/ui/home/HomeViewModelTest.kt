@@ -11,8 +11,10 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -288,6 +290,199 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("latest")))), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `refresh keeps loaded content visible until the new first page succeeds`() = runTest(dispatcher) {
+        val original = article("original")
+        val replacement = article("replacement")
+        val refreshed = CompletableDeferred<NewsPageResult>()
+        var attempts = 0
+        val fake = FakeNewsRepository { _, _ ->
+            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 1))
+            else refreshed.await()
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.refresh()
+        assertEquals(
+            HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(original)), isRefreshing = true),
+            viewModel.uiState.value,
+        )
+        runCurrent()
+        assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), fake.requests)
+
+        refreshed.complete(NewsPageResult.Success(ArticlePage(listOf(replacement), 1)))
+        runCurrent()
+        assertEquals(
+            HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(replacement))),
+            viewModel.uiState.value,
+        )
+    }
+
+    @Test
+    fun `successful refresh emits feedback even when articles are unchanged`() = runTest(dispatcher) {
+        val original = article("original")
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(original), 1)) }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        val successEvents = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.refreshSucceeded.collect { successEvents += it }
+        }
+
+        assertEquals(0, successEvents.size)
+        viewModel.refresh()
+        runCurrent()
+
+        assertEquals(2, fake.requests.size)
+        assertEquals(1, successEvents.size)
+        assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(original))), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `refresh failure keeps content and exposes a nonblocking error`() = runTest(dispatcher) {
+        val original = article("original")
+        var attempts = 0
+        val fake = FakeNewsRepository { _, _ ->
+            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 1))
+            else NewsPageResult.Failure(NewsError.CONNECTION)
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+
+        assertEquals(
+            HomeScreenState(
+                NewsCategory.GENERAL,
+                HomeUiState.Content(listOf(original)),
+                refreshError = NewsError.CONNECTION,
+            ),
+            viewModel.uiState.value,
+        )
+    }
+
+    @Test
+    fun `retrying a failed refresh clears its old error while the list remains visible`() = runTest(dispatcher) {
+        val original = article("original")
+        val retry = CompletableDeferred<NewsPageResult>()
+        var attempts = 0
+        val fake = FakeNewsRepository { _, _ ->
+            when (++attempts) {
+                1 -> NewsPageResult.Success(ArticlePage(listOf(original), 1))
+                2 -> NewsPageResult.Failure(NewsError.CONNECTION)
+                else -> retry.await()
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.refresh()
+        runCurrent()
+
+        viewModel.refresh()
+        assertEquals(
+            HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(original)), isRefreshing = true),
+            viewModel.uiState.value,
+        )
+        runCurrent()
+        assertEquals(3, fake.requests.size)
+
+        retry.complete(NewsPageResult.Success(ArticlePage(listOf(article("new")), 1)))
+        runCurrent()
+        assertEquals(
+            HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("new")))),
+            viewModel.uiState.value,
+        )
+    }
+
+    @Test
+    fun `successful empty refresh replaces old content with empty state`() = runTest(dispatcher) {
+        var attempts = 0
+        val fake = FakeNewsRepository { _, _ ->
+            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 1))
+            else NewsPageResult.Success(ArticlePage(emptyList(), 0))
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+
+        assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Empty), viewModel.uiState.value)
+        assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), fake.requests)
+    }
+
+    @Test
+    fun `initial load and active refresh reject duplicate first page requests`() = runTest(dispatcher) {
+        val initial = CompletableDeferred<NewsPageResult>()
+        val refreshed = CompletableDeferred<NewsPageResult>()
+        var attempts = 0
+        val fake = FakeNewsRepository { _, _ ->
+            if (++attempts == 1) initial.await() else refreshed.await()
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        assertEquals(listOf(NewsCategory.GENERAL to 1), fake.requests)
+
+        initial.complete(NewsPageResult.Success(ArticlePage(listOf(article("old")), 1)))
+        runCurrent()
+        viewModel.refresh()
+        viewModel.refresh()
+        runCurrent()
+        assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), fake.requests)
+
+        refreshed.complete(NewsPageResult.Success(ArticlePage(listOf(article("new")), 1)))
+        runCurrent()
+        assertEquals(
+            HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("new")))),
+            viewModel.uiState.value,
+        )
+    }
+
+    @Test
+    fun `switching category invalidates an unfinished refresh failure`() = runTest(dispatcher) {
+        val staleRefresh = CompletableDeferred<NewsPageResult>()
+        var technologyRequests = 0
+        val fake = FakeNewsRepository { category, _ ->
+            when (category) {
+                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(article("general")), 1))
+                NewsCategory.TECHNOLOGY -> {
+                    if (++technologyRequests == 1) {
+                        NewsPageResult.Success(ArticlePage(listOf(article("technology")), 1))
+                    } else {
+                        withContext(NonCancellable) { staleRefresh.await() }
+                    }
+                }
+                else -> error("Unexpected category: $category")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.selectCategory(NewsCategory.TECHNOLOGY)
+        runCurrent()
+        viewModel.refresh()
+        runCurrent()
+
+        viewModel.selectCategory(NewsCategory.GENERAL)
+        staleRefresh.complete(NewsPageResult.Failure(NewsError.CONNECTION))
+        runCurrent()
+        assertEquals(
+            HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("general")))),
+            viewModel.uiState.value,
+        )
+
+        viewModel.selectCategory(NewsCategory.TECHNOLOGY)
+        assertEquals(
+            HomeScreenState(NewsCategory.TECHNOLOGY, HomeUiState.Content(listOf(article("technology")))),
+            viewModel.uiState.value,
+        )
+        assertEquals(2, technologyRequests)
     }
 
     private fun article(id: String) = Article(id, id, null, null, null, null, null, null)

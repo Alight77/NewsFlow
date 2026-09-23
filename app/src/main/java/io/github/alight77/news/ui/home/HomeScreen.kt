@@ -4,8 +4,10 @@ import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,18 +16,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.alight77.news.R
 import io.github.alight77.news.domain.model.Article
@@ -43,21 +54,37 @@ fun HomeScreen(
     onOpenDetail: (Article) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    HomeScreenContent(
-        contentPadding = contentPadding,
-        uiState = uiState,
-        onCategorySelected = viewModel::selectCategory,
-        onRetry = viewModel::retry,
-        onOpenDetail = onOpenDetail,
-    )
+    val snackbarHostState = remember { SnackbarHostState() }
+    val refreshSuccessMessage = stringResource(R.string.home_refresh_succeeded)
+    LaunchedEffect(viewModel, refreshSuccessMessage) {
+        viewModel.refreshSucceeded.collect {
+            snackbarHostState.showSnackbar(refreshSuccessMessage, duration = SnackbarDuration.Short)
+        }
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        HomeScreenContent(
+            contentPadding = contentPadding,
+            uiState = uiState,
+            onCategorySelected = viewModel::selectCategory,
+            onRetry = viewModel::retry,
+            onRefresh = viewModel::refresh,
+            onOpenDetail = onOpenDetail,
+        )
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(contentPadding),
+        )
+    }
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun HomeScreenContent(
     contentPadding: PaddingValues,
     uiState: HomeScreenState,
     onCategorySelected: (NewsCategory) -> Unit,
     onRetry: () -> Unit,
+    onRefresh: () -> Unit,
     onOpenDetail: (Article) -> Unit,
 ) {
     Column(
@@ -95,12 +122,22 @@ private fun HomeScreenContent(
                 Text(stringResource(state.error.messageRes()))
                 Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
             }
-            is HomeUiState.Content -> LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.articles, key = Article::id) { article ->
-                    ArticleCard(article = article, onClick = { onOpenDetail(article) })
+            is HomeUiState.Content -> {
+                RefreshErrorBanner(uiState.refreshError, onRefresh)
+                PullToRefreshBox(
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().testTag("home_articles"),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(state.articles, key = Article::id) { article ->
+                            ArticleCard(article = article, onClick = { onOpenDetail(article) })
+                        }
+                    }
                 }
             }
         }
@@ -128,6 +165,26 @@ private fun HomeMessage(content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun RefreshErrorBanner(error: NewsError?, onRetry: () -> Unit) {
+    if (error == null) return
+
+    Surface(color = MaterialTheme.colorScheme.errorContainer) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.home_refresh_failed, stringResource(error.messageRes())),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.refresh_retry)) }
+        }
+    }
+}
+
+@Composable
 private fun ArticleCard(article: Article, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column {
@@ -147,7 +204,11 @@ private fun ArticleCard(article: Article, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PreviewHome(pageState: HomeUiState) {
+private fun PreviewHome(
+    pageState: HomeUiState,
+    isRefreshing: Boolean = false,
+    refreshError: NewsError? = null,
+) {
     NewsTheme(dynamicColor = false) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -155,9 +216,10 @@ private fun PreviewHome(pageState: HomeUiState) {
         ) {
             HomeScreenContent(
                 contentPadding = PaddingValues(),
-                uiState = HomeScreenState(NewsCategory.GENERAL, pageState),
+                uiState = HomeScreenState(NewsCategory.GENERAL, pageState, isRefreshing, refreshError),
                 onCategorySelected = {},
                 onRetry = {},
+                onRefresh = {},
                 onOpenDetail = {},
             )
         }
@@ -168,22 +230,20 @@ private fun PreviewHome(pageState: HomeUiState) {
 @Preview(name = "Home - content dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun HomeContentPreview() {
-    PreviewHome(
-        HomeUiState.Content(
-            listOf(
-                Article(
-                    id = "preview-1",
-                    title = "示例新闻标题：用于检查较长标题的换行效果",
-                    description = "这是一段用于预览首页文章卡片布局的摘要。",
-                    contentPreview = null,
-                    originalUrl = null,
-                    imageUrl = null,
-                    publishedAt = null,
-                    sourceName = "示例来源",
-                ),
-            ),
-        ),
-    )
+    PreviewHome(previewContent())
+}
+
+@Preview(name = "Home - refreshing", showBackground = true)
+@Composable
+private fun HomeRefreshingPreview() {
+    PreviewHome(previewContent(), isRefreshing = true)
+}
+
+@Preview(name = "Home - refresh failed", showBackground = true)
+@Preview(name = "Home - refresh failed dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun HomeRefreshFailedPreview() {
+    PreviewHome(previewContent(), refreshError = NewsError.CONNECTION)
 }
 
 @Preview(name = "Home - loading", showBackground = true)
@@ -203,3 +263,18 @@ private fun HomeEmptyPreview() {
 private fun HomeErrorPreview() {
     PreviewHome(HomeUiState.Error(NewsError.CONNECTION))
 }
+
+private fun previewContent() = HomeUiState.Content(
+    listOf(
+        Article(
+            id = "preview-1",
+            title = "示例新闻标题：用于检查较长标题的换行效果",
+            description = "这是一段用于预览首页文章卡片布局的摘要。",
+            contentPreview = null,
+            originalUrl = null,
+            imageUrl = null,
+            publishedAt = null,
+            sourceName = "示例来源",
+        ),
+    ),
+)

@@ -7,6 +7,8 @@ import io.github.alight77.news.domain.model.NewsError
 data class HomeScreenState(
     val selectedCategory: NewsCategory,
     val pageState: HomeUiState,
+    val isRefreshing: Boolean = false,
+    val refreshError: NewsError? = null,
 )
 
 sealed interface HomeUiState {
