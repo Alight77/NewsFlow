@@ -12,4 +12,13 @@ interface GNewsService {
         @Query("max") max: Int,
         @Query("page") page: Int,
     ): GNewsResponseDto
+
+    @GET("search")
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("lang") lang: String,
+        @Query("country") country: String,
+        @Query("max") max: Int,
+        @Query("page") page: Int,
+    ): GNewsResponseDto
 }

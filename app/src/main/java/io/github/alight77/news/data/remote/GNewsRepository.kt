@@ -17,15 +17,35 @@ class GNewsRepository(private val service: GNewsService) : NewsRepository {
     override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult {
         require(page >= 1) { "Page must be positive." }
 
-        return try {
-            val response = service.getTopHeadlines(
+        return request {
+            service.getTopHeadlines(
                 category = category.apiValue,
                 lang = LANGUAGE,
                 country = COUNTRY,
                 max = PAGE_SIZE,
                 page = page,
             )
-            NewsPageResult.Success(response.toArticlePage())
+        }
+    }
+
+    override suspend fun search(query: String): NewsPageResult {
+        val normalizedQuery = query.trim()
+        require(normalizedQuery.isNotEmpty()) { "Search query must not be blank." }
+
+        return request {
+            service.search(
+                query = normalizedQuery,
+                lang = LANGUAGE,
+                country = COUNTRY,
+                max = PAGE_SIZE,
+                page = FIRST_PAGE,
+            )
+        }
+    }
+
+    private suspend fun request(request: suspend () -> GNewsResponseDto): NewsPageResult {
+        return try {
+            NewsPageResult.Success(request().toArticlePage())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (http: HttpException) {
@@ -59,5 +79,6 @@ class GNewsRepository(private val service: GNewsService) : NewsRepository {
         const val LANGUAGE = "zh"
         const val COUNTRY = "cn"
         const val PAGE_SIZE = 10
+        const val FIRST_PAGE = 1
     }
 }

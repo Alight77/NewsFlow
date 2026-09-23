@@ -45,7 +45,7 @@ class HomeCategoryUiTest {
         composeRule.onNodeWithText("general story").assertDoesNotExist()
 
         composeRule.onNodeWithText("搜索").performClick()
-        composeRule.onNodeWithText("搜索功能将在后续阶段接入。").assertIsDisplayed()
+        composeRule.onNodeWithText("输入关键词后自动搜索").assertIsDisplayed()
         composeRule.onNodeWithText("首页").performClick()
         composeRule.onNodeWithText("technology story").assertIsDisplayed()
         composeRule.onNodeWithText("综合").performClick()

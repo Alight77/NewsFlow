@@ -38,6 +38,7 @@ import io.github.alight77.news.ui.favorites.FavoritesScreen
 import io.github.alight77.news.ui.home.HomeScreen
 import io.github.alight77.news.ui.home.HomeViewModel
 import io.github.alight77.news.ui.search.SearchScreen
+import io.github.alight77.news.ui.search.SearchViewModel
 import io.github.alight77.news.ui.theme.NewsTheme
 
 @Composable
@@ -47,6 +48,10 @@ fun NewsApp(repository: NewsRepository) {
     val homeViewModel: HomeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = HomeViewModel(repository) as T
+    })
+    val searchViewModel: SearchViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = SearchViewModel(repository) as T
     })
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -89,7 +94,14 @@ fun NewsApp(repository: NewsRepository) {
                 )
             }
             composable(NewsDestination.Search.route) {
-                SearchScreen(contentPadding = innerPadding)
+                SearchScreen(
+                    contentPadding = innerPadding,
+                    viewModel = searchViewModel,
+                    onOpenDetail = { article ->
+                        articleSession.open(article)
+                        navController.navigate("article_detail/${Uri.encode(article.id)}")
+                    },
+                )
             }
             composable(NewsDestination.Favorites.route) {
                 FavoritesScreen(contentPadding = innerPadding)

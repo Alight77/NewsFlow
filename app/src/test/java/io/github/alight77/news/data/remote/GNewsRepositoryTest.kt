@@ -54,6 +54,23 @@ class GNewsRepositoryTest {
     }
 
     @Test
+    fun `searches the first page with fixed GNews parameters and a trimmed query`() = runBlocking {
+        server.enqueue(MockResponse().setBody(validResponse))
+
+        val result = networkRepository().search(" Android ")
+
+        assertTrue(result is NewsPageResult.Success)
+        val request = server.takeRequest()
+        assertEquals("/api/v4/search", request.requestUrl!!.encodedPath)
+        assertEquals("Android", request.requestUrl!!.queryParameter("q"))
+        assertEquals("zh", request.requestUrl!!.queryParameter("lang"))
+        assertEquals("cn", request.requestUrl!!.queryParameter("country"))
+        assertEquals("10", request.requestUrl!!.queryParameter("max"))
+        assertEquals("1", request.requestUrl!!.queryParameter("page"))
+        assertEquals("test-api-key", request.getHeader("X-Api-Key"))
+    }
+
+    @Test
     fun `an empty remote page remains a successful empty page`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"totalArticles":0,"articles":[]}"""))
 
@@ -140,6 +157,16 @@ class GNewsRepositoryTest {
         assertEquals(0, server.requestCount)
     }
 
+    @Test
+    fun `rejects a blank search query before making a request`() {
+        val repository = networkRepository()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repository.search("  ") }
+        }
+        assertEquals(0, server.requestCount)
+    }
+
     private fun networkRepository(): GNewsRepository = GNewsRepository(
         GNewsNetworkClient.create(
             apiKey = "test-api-key",
@@ -150,6 +177,14 @@ class GNewsRepositoryTest {
     private fun serviceThatThrows(error: Exception): GNewsService = object : GNewsService {
         override suspend fun getTopHeadlines(
             category: String,
+            lang: String,
+            country: String,
+            max: Int,
+            page: Int,
+        ): GNewsResponseDto = throw error
+
+        override suspend fun search(
+            query: String,
             lang: String,
             country: String,
             max: Int,

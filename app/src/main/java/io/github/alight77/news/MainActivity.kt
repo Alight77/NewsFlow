@@ -22,6 +22,9 @@ class MainActivity : ComponentActivity() {
             object : NewsRepository {
                 override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult =
                     NewsPageResult.Failure(NewsError.AUTHENTICATION)
+
+                override suspend fun search(query: String): NewsPageResult =
+                    NewsPageResult.Failure(NewsError.AUTHENTICATION)
             }
         } else {
             GNewsRepository(GNewsNetworkClient.create().create(GNewsService::class.java))
