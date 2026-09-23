@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui
 
+import android.content.res.Configuration
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxSize
@@ -127,6 +128,7 @@ private fun NewsBottomNavigation(
 }
 
 @Preview(name = "Bottom navigation", showBackground = true)
+@Preview(name = "Bottom navigation dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun NewsBottomNavigationPreview() {
     NewsTheme(dynamicColor = false) {

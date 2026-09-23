@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.home
 
+import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -148,7 +149,10 @@ private fun ArticleCard(article: Article, onClick: () -> Unit) {
 @Composable
 private fun PreviewHome(pageState: HomeUiState) {
     NewsTheme(dynamicColor = false) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
             HomeScreenContent(
                 contentPadding = PaddingValues(),
                 uiState = HomeScreenState(NewsCategory.GENERAL, pageState),
@@ -161,6 +165,7 @@ private fun PreviewHome(pageState: HomeUiState) {
 }
 
 @Preview(name = "Home - content", showBackground = true)
+@Preview(name = "Home - content dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun HomeContentPreview() {
     PreviewHome(

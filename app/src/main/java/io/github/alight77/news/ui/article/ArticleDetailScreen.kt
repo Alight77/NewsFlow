@@ -137,7 +137,10 @@ fun ArticleDetailScreen(
 @Composable
 private fun ArticleDetailPreview() {
     NewsTheme(dynamicColor = false) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
             ArticleDetailScreen(
                 contentPadding = PaddingValues(),
                 article = Article(
@@ -160,7 +163,10 @@ private fun ArticleDetailPreview() {
 @Composable
 private fun ArticleUnavailablePreview() {
     NewsTheme(dynamicColor = false) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
             ArticleDetailScreen(
                 contentPadding = PaddingValues(),
                 article = null,
