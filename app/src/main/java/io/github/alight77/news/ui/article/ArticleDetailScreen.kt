@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -25,11 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.alight77.news.R
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.ui.components.ArticleImage
 import io.github.alight77.news.ui.components.ArticleMeta
+import io.github.alight77.news.ui.theme.NewsTheme
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable
@@ -126,6 +129,43 @@ fun ArticleDetailScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Preview(name = "Detail - article", showBackground = true)
+@Composable
+private fun ArticleDetailPreview() {
+    NewsTheme(dynamicColor = false) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            ArticleDetailScreen(
+                contentPadding = PaddingValues(),
+                article = Article(
+                    id = "preview-article",
+                    title = "示例新闻标题：检查详情页的标题、摘要与原文入口",
+                    description = "这是一段用于检查详情页排版的文章摘要。",
+                    contentPreview = "这里显示与摘要不同的内容预览。",
+                    originalUrl = "https://example.com/article",
+                    imageUrl = null,
+                    publishedAt = null,
+                    sourceName = "示例来源",
+                ),
+                onNavigateUp = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Detail - unavailable", showBackground = true)
+@Composable
+private fun ArticleUnavailablePreview() {
+    NewsTheme(dynamicColor = false) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            ArticleDetailScreen(
+                contentPadding = PaddingValues(),
+                article = null,
+                onNavigateUp = {},
+            )
         }
     }
 }

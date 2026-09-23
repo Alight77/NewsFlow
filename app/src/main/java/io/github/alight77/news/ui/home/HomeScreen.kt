@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,14 +23,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.alight77.news.R
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.NewsCategory
+import io.github.alight77.news.domain.model.NewsError
 import io.github.alight77.news.ui.components.ArticleImage
 import io.github.alight77.news.ui.components.ArticleMeta
 import io.github.alight77.news.ui.components.messageRes
+import io.github.alight77.news.ui.theme.NewsTheme
 
 @Composable
 fun HomeScreen(
@@ -38,6 +42,23 @@ fun HomeScreen(
     onOpenDetail: (Article) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    HomeScreenContent(
+        contentPadding = contentPadding,
+        uiState = uiState,
+        onCategorySelected = viewModel::selectCategory,
+        onRetry = viewModel::retry,
+        onOpenDetail = onOpenDetail,
+    )
+}
+
+@Composable
+private fun HomeScreenContent(
+    contentPadding: PaddingValues,
+    uiState: HomeScreenState,
+    onCategorySelected: (NewsCategory) -> Unit,
+    onRetry: () -> Unit,
+    onOpenDetail: (Article) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -55,7 +76,7 @@ fun HomeScreen(
             NewsCategory.entries.forEach { category ->
                 Tab(
                     selected = uiState.selectedCategory == category,
-                    onClick = { viewModel.selectCategory(category) },
+                    onClick = { onCategorySelected(category) },
                     text = { Text(stringResource(category.labelRes())) },
                 )
             }
@@ -67,11 +88,11 @@ fun HomeScreen(
             }
             HomeUiState.Empty -> HomeMessage {
                 Text(stringResource(R.string.home_empty))
-                Button(onClick = viewModel::retry) { Text(stringResource(R.string.retry)) }
+                Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
             }
             is HomeUiState.Error -> HomeMessage {
                 Text(stringResource(state.error.messageRes()))
-                Button(onClick = viewModel::retry) { Text(stringResource(R.string.retry)) }
+                Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
             }
             is HomeUiState.Content -> LazyColumn(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -122,4 +143,58 @@ private fun ArticleCard(article: Article, onClick: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun PreviewHome(pageState: HomeUiState) {
+    NewsTheme(dynamicColor = false) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            HomeScreenContent(
+                contentPadding = PaddingValues(),
+                uiState = HomeScreenState(NewsCategory.GENERAL, pageState),
+                onCategorySelected = {},
+                onRetry = {},
+                onOpenDetail = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Home - content", showBackground = true)
+@Composable
+private fun HomeContentPreview() {
+    PreviewHome(
+        HomeUiState.Content(
+            listOf(
+                Article(
+                    id = "preview-1",
+                    title = "示例新闻标题：用于检查较长标题的换行效果",
+                    description = "这是一段用于预览首页文章卡片布局的摘要。",
+                    contentPreview = null,
+                    originalUrl = null,
+                    imageUrl = null,
+                    publishedAt = null,
+                    sourceName = "示例来源",
+                ),
+            ),
+        ),
+    )
+}
+
+@Preview(name = "Home - loading", showBackground = true)
+@Composable
+private fun HomeLoadingPreview() {
+    PreviewHome(HomeUiState.Loading)
+}
+
+@Preview(name = "Home - empty", showBackground = true)
+@Composable
+private fun HomeEmptyPreview() {
+    PreviewHome(HomeUiState.Empty)
+}
+
+@Preview(name = "Home - error", showBackground = true)
+@Composable
+private fun HomeErrorPreview() {
+    PreviewHome(HomeUiState.Error(NewsError.CONNECTION))
 }
