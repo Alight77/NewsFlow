@@ -9,7 +9,16 @@ data class HomeScreenState(
     val pageState: HomeUiState,
     val isRefreshing: Boolean = false,
     val refreshError: NewsError? = null,
+    val appendState: HomeAppendState = HomeAppendState.Idle,
 )
+
+sealed interface HomeAppendState {
+    data object Idle : HomeAppendState
+    data object Loading : HomeAppendState
+    data class Error(val error: NewsError) : HomeAppendState
+    data object ManualContinue : HomeAppendState
+    data object EndReached : HomeAppendState
+}
 
 sealed interface HomeUiState {
     data object Loading : HomeUiState

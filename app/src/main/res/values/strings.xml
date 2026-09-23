@@ -15,6 +15,12 @@
     <string name="home_empty">暂无新闻。</string>
     <string name="home_refresh_failed">刷新失败：%1$s</string>
     <string name="home_refresh_succeeded">已刷新</string>
+    <string name="home_loading_more">正在加载更多…</string>
+    <string name="home_append_failed">加载更多失败：%1$s</string>
+    <string name="home_retry_append">重试加载</string>
+    <string name="home_no_new_articles">本页暂无新文章</string>
+    <string name="home_continue_append">加载下一页</string>
+    <string name="home_end_reached">没有更多新闻了</string>
     <string name="retry">重新加载</string>
     <string name="refresh_retry">重试刷新</string>
     <string name="image_unavailable">图片暂不可用</string>

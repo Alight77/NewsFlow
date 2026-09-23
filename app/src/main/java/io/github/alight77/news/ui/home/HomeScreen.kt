@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,6 +33,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -68,6 +71,8 @@ fun HomeScreen(
             onCategorySelected = viewModel::selectCategory,
             onRetry = viewModel::retry,
             onRefresh = viewModel::refresh,
+            onLoadNextPage = viewModel::loadNextPage,
+            onRetryNextPage = viewModel::retryNextPage,
             onOpenDetail = onOpenDetail,
         )
         SnackbarHost(
@@ -85,6 +90,8 @@ private fun HomeScreenContent(
     onCategorySelected: (NewsCategory) -> Unit,
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
+    onLoadNextPage: () -> Unit,
+    onRetryNextPage: () -> Unit,
     onOpenDetail: (Article) -> Unit,
 ) {
     Column(
@@ -123,6 +130,25 @@ private fun HomeScreenContent(
                 Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
             }
             is HomeUiState.Content -> {
+                val listState = rememberLazyListState()
+                val articleCount by rememberUpdatedState(state.articles.size)
+                val loadNextPage by rememberUpdatedState(onLoadNextPage)
+                LaunchedEffect(listState, uiState.selectedCategory) {
+                    var requestedDuringScroll = false
+                    snapshotFlow {
+                        Triple(
+                            listState.isScrollInProgress,
+                            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                            listState.layoutInfo.totalItemsCount,
+                        )
+                    }.collect { (scrolling, lastVisibleIndex, _) ->
+                        if (!scrolling) requestedDuringScroll = false
+                        else if (!requestedDuringScroll && lastVisibleIndex >= articleCount - 3) {
+                            requestedDuringScroll = true
+                            loadNextPage()
+                        }
+                    }
+                }
                 RefreshErrorBanner(uiState.refreshError, onRefresh)
                 PullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
@@ -130,6 +156,7 @@ private fun HomeScreenContent(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize().testTag("home_articles"),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -137,9 +164,38 @@ private fun HomeScreenContent(
                         items(state.articles, key = Article::id) { article ->
                             ArticleCard(article = article, onClick = { onOpenDetail(article) })
                         }
+                        if (uiState.appendState != HomeAppendState.Idle) {
+                            item { AppendFooter(uiState.appendState, onRetryNextPage) }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppendFooter(state: HomeAppendState, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        when (state) {
+            HomeAppendState.Idle -> Unit
+            HomeAppendState.Loading -> {
+                CircularProgressIndicator()
+                Text(stringResource(R.string.home_loading_more))
+            }
+            is HomeAppendState.Error -> {
+                Text(stringResource(R.string.home_append_failed, stringResource(state.error.messageRes())))
+                Button(onClick = onRetry) { Text(stringResource(R.string.home_retry_append)) }
+            }
+            HomeAppendState.ManualContinue -> {
+                Text(stringResource(R.string.home_no_new_articles))
+                Button(onClick = onRetry) { Text(stringResource(R.string.home_continue_append)) }
+            }
+            HomeAppendState.EndReached -> Text(stringResource(R.string.home_end_reached))
         }
     }
 }
@@ -208,6 +264,7 @@ private fun PreviewHome(
     pageState: HomeUiState,
     isRefreshing: Boolean = false,
     refreshError: NewsError? = null,
+    appendState: HomeAppendState = HomeAppendState.Idle,
 ) {
     NewsTheme(dynamicColor = false) {
         Surface(
@@ -216,10 +273,12 @@ private fun PreviewHome(
         ) {
             HomeScreenContent(
                 contentPadding = PaddingValues(),
-                uiState = HomeScreenState(NewsCategory.GENERAL, pageState, isRefreshing, refreshError),
+                uiState = HomeScreenState(NewsCategory.GENERAL, pageState, isRefreshing, refreshError, appendState),
                 onCategorySelected = {},
                 onRetry = {},
                 onRefresh = {},
+                onLoadNextPage = {},
+                onRetryNextPage = {},
                 onOpenDetail = {},
             )
         }
@@ -244,6 +303,31 @@ private fun HomeRefreshingPreview() {
 @Composable
 private fun HomeRefreshFailedPreview() {
     PreviewHome(previewContent(), refreshError = NewsError.CONNECTION)
+}
+
+@Preview(name = "Home - loading more", showBackground = true)
+@Composable
+private fun HomeAppendLoadingPreview() {
+    PreviewHome(previewContent(), appendState = HomeAppendState.Loading)
+}
+
+@Preview(name = "Home - load more failed", showBackground = true)
+@Preview(name = "Home - load more failed dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun HomeAppendErrorPreview() {
+    PreviewHome(previewContent(), appendState = HomeAppendState.Error(NewsError.CONNECTION))
+}
+
+@Preview(name = "Home - continue after duplicates", showBackground = true)
+@Composable
+private fun HomeAppendManualPreview() {
+    PreviewHome(previewContent(), appendState = HomeAppendState.ManualContinue)
+}
+
+@Preview(name = "Home - end reached", showBackground = true)
+@Composable
+private fun HomeAppendEndPreview() {
+    PreviewHome(previewContent(), appendState = HomeAppendState.EndReached)
 }
 
 @Preview(name = "Home - loading", showBackground = true)

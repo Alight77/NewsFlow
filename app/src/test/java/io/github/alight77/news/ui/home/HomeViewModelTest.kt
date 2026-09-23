@@ -50,7 +50,7 @@ class HomeViewModelTest {
             publishedAt = null,
             sourceName = null,
         )
-        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(article), 1)) }
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(article), 10)) }
         val viewModel = HomeViewModel(fake)
 
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Loading), viewModel.uiState.value)
@@ -86,7 +86,7 @@ class HomeViewModelTest {
         var attempt = 0
         val fake = FakeNewsRepository { _, _ ->
             if (++attempt == 1) NewsPageResult.Failure(NewsError.CONNECTION)
-            else NewsPageResult.Success(ArticlePage(listOf(article), 1))
+            else NewsPageResult.Success(ArticlePage(listOf(article), 10))
         }
         val viewModel = HomeViewModel(fake)
         runCurrent()
@@ -133,7 +133,7 @@ class HomeViewModelTest {
         val technology = article("technology")
         val fake = FakeNewsRepository { category, _ ->
             val result = if (category == NewsCategory.GENERAL) general else technology
-            NewsPageResult.Success(ArticlePage(listOf(result), 1))
+            NewsPageResult.Success(ArticlePage(listOf(result), 10))
         }
         val viewModel = HomeViewModel(fake)
         runCurrent()
@@ -154,7 +154,7 @@ class HomeViewModelTest {
         val fake = FakeNewsRepository { category, _ ->
             NewsPageResult.Success(
                 if (category == NewsCategory.GENERAL) ArticlePage(emptyList(), 0)
-                else ArticlePage(listOf(article("technology")), 1),
+                else ArticlePage(listOf(article("technology")), 10),
             )
         }
         val viewModel = HomeViewModel(fake)
@@ -174,7 +174,7 @@ class HomeViewModelTest {
         val general = article("general")
         val fake = FakeNewsRepository { category, _ ->
             when (category) {
-                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(general), 1))
+                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(general), 10))
                 NewsCategory.TECHNOLOGY -> withContext(NonCancellable) { unfinishedTechnology.await() }
                 else -> error("Unexpected category: $category")
             }
@@ -186,7 +186,7 @@ class HomeViewModelTest {
 
         viewModel.selectCategory(NewsCategory.GENERAL)
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(general))), viewModel.uiState.value)
-        unfinishedTechnology.complete(NewsPageResult.Success(ArticlePage(listOf(article("late")), 1)))
+        unfinishedTechnology.complete(NewsPageResult.Success(ArticlePage(listOf(article("late")), 10)))
         runCurrent()
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(general))), viewModel.uiState.value)
 
@@ -201,10 +201,10 @@ class HomeViewModelTest {
         var technologyAttempts = 0
         val fake = FakeNewsRepository { category, _ ->
             when (category) {
-                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(article("general")), 1))
+                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(article("general")), 10))
                 NewsCategory.TECHNOLOGY -> {
                     if (++technologyAttempts == 1) NewsPageResult.Failure(NewsError.CONNECTION)
-                    else NewsPageResult.Success(ArticlePage(listOf(article("technology")), 1))
+                    else NewsPageResult.Success(ArticlePage(listOf(article("technology")), 10))
                 }
                 else -> error("Unexpected category: $category")
             }
@@ -248,7 +248,7 @@ class HomeViewModelTest {
         viewModel.selectCategory(NewsCategory.GENERAL)
         runCurrent()
 
-        firstA.complete(NewsPageResult.Success(ArticlePage(listOf(article("stale")), 1)))
+        firstA.complete(NewsPageResult.Success(ArticlePage(listOf(article("stale")), 10)))
         requestB.complete(NewsPageResult.Failure(NewsError.RATE_LIMITED))
         runCurrent()
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Loading), viewModel.uiState.value)
@@ -256,7 +256,7 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals(3, fake.requests.size)
 
-        latestA.complete(NewsPageResult.Success(ArticlePage(listOf(article("latest")), 1)))
+        latestA.complete(NewsPageResult.Success(ArticlePage(listOf(article("latest")), 10)))
         runCurrent()
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("latest")))), viewModel.uiState.value)
         assertEquals(
@@ -273,9 +273,9 @@ class HomeViewModelTest {
             when (category) {
                 NewsCategory.GENERAL -> {
                     if (++aRequests == 1) withContext(NonCancellable) { firstA.await() }
-                    else NewsPageResult.Success(ArticlePage(listOf(article("latest")), 1))
+                    else NewsPageResult.Success(ArticlePage(listOf(article("latest")), 10))
                 }
-                NewsCategory.SCIENCE -> NewsPageResult.Success(ArticlePage(listOf(article("science")), 1))
+                NewsCategory.SCIENCE -> NewsPageResult.Success(ArticlePage(listOf(article("science")), 10))
                 else -> error("Unexpected category: $category")
             }
         }
@@ -299,7 +299,7 @@ class HomeViewModelTest {
         val refreshed = CompletableDeferred<NewsPageResult>()
         var attempts = 0
         val fake = FakeNewsRepository { _, _ ->
-            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 1))
+            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 10))
             else refreshed.await()
         }
         val viewModel = HomeViewModel(fake)
@@ -313,7 +313,7 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), fake.requests)
 
-        refreshed.complete(NewsPageResult.Success(ArticlePage(listOf(replacement), 1)))
+        refreshed.complete(NewsPageResult.Success(ArticlePage(listOf(replacement), 10)))
         runCurrent()
         assertEquals(
             HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(replacement))),
@@ -324,7 +324,7 @@ class HomeViewModelTest {
     @Test
     fun `successful refresh emits feedback even when articles are unchanged`() = runTest(dispatcher) {
         val original = article("original")
-        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(original), 1)) }
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(original), 10)) }
         val viewModel = HomeViewModel(fake)
         runCurrent()
         val successEvents = mutableListOf<Unit>()
@@ -346,7 +346,7 @@ class HomeViewModelTest {
         val original = article("original")
         var attempts = 0
         val fake = FakeNewsRepository { _, _ ->
-            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 1))
+            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 10))
             else NewsPageResult.Failure(NewsError.CONNECTION)
         }
         val viewModel = HomeViewModel(fake)
@@ -372,7 +372,7 @@ class HomeViewModelTest {
         var attempts = 0
         val fake = FakeNewsRepository { _, _ ->
             when (++attempts) {
-                1 -> NewsPageResult.Success(ArticlePage(listOf(original), 1))
+                1 -> NewsPageResult.Success(ArticlePage(listOf(original), 10))
                 2 -> NewsPageResult.Failure(NewsError.CONNECTION)
                 else -> retry.await()
             }
@@ -390,7 +390,7 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals(3, fake.requests.size)
 
-        retry.complete(NewsPageResult.Success(ArticlePage(listOf(article("new")), 1)))
+        retry.complete(NewsPageResult.Success(ArticlePage(listOf(article("new")), 10)))
         runCurrent()
         assertEquals(
             HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("new")))),
@@ -402,7 +402,7 @@ class HomeViewModelTest {
     fun `successful empty refresh replaces old content with empty state`() = runTest(dispatcher) {
         var attempts = 0
         val fake = FakeNewsRepository { _, _ ->
-            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 1))
+            if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 10))
             else NewsPageResult.Success(ArticlePage(emptyList(), 0))
         }
         val viewModel = HomeViewModel(fake)
@@ -430,14 +430,14 @@ class HomeViewModelTest {
         runCurrent()
         assertEquals(listOf(NewsCategory.GENERAL to 1), fake.requests)
 
-        initial.complete(NewsPageResult.Success(ArticlePage(listOf(article("old")), 1)))
+        initial.complete(NewsPageResult.Success(ArticlePage(listOf(article("old")), 10)))
         runCurrent()
         viewModel.refresh()
         viewModel.refresh()
         runCurrent()
         assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), fake.requests)
 
-        refreshed.complete(NewsPageResult.Success(ArticlePage(listOf(article("new")), 1)))
+        refreshed.complete(NewsPageResult.Success(ArticlePage(listOf(article("new")), 10)))
         runCurrent()
         assertEquals(
             HomeScreenState(NewsCategory.GENERAL, HomeUiState.Content(listOf(article("new")))),
@@ -451,10 +451,10 @@ class HomeViewModelTest {
         var technologyRequests = 0
         val fake = FakeNewsRepository { category, _ ->
             when (category) {
-                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(article("general")), 1))
+                NewsCategory.GENERAL -> NewsPageResult.Success(ArticlePage(listOf(article("general")), 10))
                 NewsCategory.TECHNOLOGY -> {
                     if (++technologyRequests == 1) {
-                        NewsPageResult.Success(ArticlePage(listOf(article("technology")), 1))
+                        NewsPageResult.Success(ArticlePage(listOf(article("technology")), 10))
                     } else {
                         withContext(NonCancellable) { staleRefresh.await() }
                     }
@@ -483,6 +483,352 @@ class HomeViewModelTest {
             viewModel.uiState.value,
         )
         assertEquals(2, technologyRequests)
+    }
+
+    @Test
+    fun `next page keeps existing articles visible and ignores duplicate triggers`() = runTest(dispatcher) {
+        val pendingPage = CompletableDeferred<NewsPageResult>()
+        val fake = FakeNewsRepository { _, page ->
+            if (page == 1) NewsPageResult.Success(ArticlePage(listOf(article("first")), 10))
+            else pendingPage.await()
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.loadNextPage()
+        viewModel.loadNextPage()
+        assertEquals(
+            HomeScreenState(
+                NewsCategory.GENERAL,
+                HomeUiState.Content(listOf(article("first"))),
+                appendState = HomeAppendState.Loading,
+            ),
+            viewModel.uiState.value,
+        )
+        runCurrent()
+        assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 2), fake.requests)
+
+        pendingPage.complete(NewsPageResult.Success(ArticlePage(listOf(article("second")), 1)))
+        runCurrent()
+        assertEquals(
+            HomeScreenState(
+                NewsCategory.GENERAL,
+                HomeUiState.Content(listOf(article("first"), article("second"))),
+                appendState = HomeAppendState.EndReached,
+            ),
+            viewModel.uiState.value,
+        )
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(2, fake.requests.size)
+    }
+
+    @Test
+    fun `failed append keeps the list and explicit retry requests the same page`() = runTest(dispatcher) {
+        var secondPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> NewsPageResult.Success(ArticlePage(listOf(article("first")), 10))
+                2 -> if (++secondPageAttempts == 1) NewsPageResult.Failure(NewsError.CONNECTION)
+                    else NewsPageResult.Success(ArticlePage(listOf(article("second")), 1))
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(HomeAppendState.Error(NewsError.CONNECTION), viewModel.uiState.value.appendState)
+        assertEquals(HomeUiState.Content(listOf(article("first"))), viewModel.uiState.value.pageState)
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(2, fake.requests.size)
+
+        viewModel.retryNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2, 2), fake.requests.map { it.second })
+        assertEquals(
+            HomeUiState.Content(listOf(article("first"), article("second"))),
+            viewModel.uiState.value.pageState,
+        )
+        assertEquals(HomeAppendState.EndReached, viewModel.uiState.value.appendState)
+    }
+
+    @Test
+    fun `duplicate-only full page requires manual continuation without ending pagination`() = runTest(dispatcher) {
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1, 2 -> NewsPageResult.Success(ArticlePage(listOf(article("first")), 10))
+                3 -> NewsPageResult.Success(ArticlePage(listOf(article("third")), 1))
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(HomeUiState.Content(listOf(article("first"))), viewModel.uiState.value.pageState)
+        assertEquals(HomeAppendState.ManualContinue, viewModel.uiState.value.appendState)
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2), fake.requests.map { it.second })
+
+        viewModel.retryNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2, 3), fake.requests.map { it.second })
+        assertEquals(
+            HomeUiState.Content(listOf(article("first"), article("third"))),
+            viewModel.uiState.value.pageState,
+        )
+    }
+
+    @Test
+    fun `refresh after append replaces old pages and restarts at page two`() = runTest(dispatcher) {
+        var firstPageAttempts = 0
+        var secondPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> if (++firstPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 10))
+                    else NewsPageResult.Success(ArticlePage(listOf(article("fresh")), 10))
+                2 -> if (++secondPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old-page-two")), 10))
+                    else NewsPageResult.Success(ArticlePage(listOf(article("fresh-page-two")), 1))
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        assertEquals(HomeUiState.Content(listOf(article("fresh"))), viewModel.uiState.value.pageState)
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2, 1, 2), fake.requests.map { it.second })
+        assertEquals(
+            HomeUiState.Content(listOf(article("fresh"), article("fresh-page-two"))),
+            viewModel.uiState.value.pageState,
+        )
+    }
+
+    @Test
+    fun `refresh invalidates a noncancellable old append result`() = runTest(dispatcher) {
+        val staleAppend = CompletableDeferred<NewsPageResult>()
+        var firstPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> if (++firstPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 10))
+                    else NewsPageResult.Success(ArticlePage(listOf(article("fresh")), 10))
+                2 -> withContext(NonCancellable) { staleAppend.await() }
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.refresh()
+        assertEquals(HomeUiState.Content(listOf(article("old"))), viewModel.uiState.value.pageState)
+        assertEquals(true, viewModel.uiState.value.isRefreshing)
+        runCurrent()
+        staleAppend.complete(NewsPageResult.Success(ArticlePage(listOf(article("stale")), 10)))
+        runCurrent()
+
+        assertEquals(HomeUiState.Content(listOf(article("fresh"))), viewModel.uiState.value.pageState)
+        assertEquals(HomeAppendState.Idle, viewModel.uiState.value.appendState)
+        assertEquals(listOf(1, 2, 1), fake.requests.map { it.second })
+    }
+
+    @Test
+    fun `failed refresh during append restores completed list and its next page`() = runTest(dispatcher) {
+        val staleAppend = CompletableDeferred<NewsPageResult>()
+        var secondPageAttempts = 0
+        var firstPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> if (++firstPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("first")), 10))
+                    else NewsPageResult.Failure(NewsError.TIMEOUT)
+                2 -> if (++secondPageAttempts == 1) withContext(NonCancellable) { staleAppend.await() }
+                    else NewsPageResult.Success(ArticlePage(listOf(article("second")), 1))
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        staleAppend.complete(NewsPageResult.Failure(NewsError.CONNECTION))
+        runCurrent()
+        assertEquals(HomeUiState.Content(listOf(article("first"))), viewModel.uiState.value.pageState)
+        assertEquals(NewsError.TIMEOUT, viewModel.uiState.value.refreshError)
+        assertEquals(HomeAppendState.Idle, viewModel.uiState.value.appendState)
+
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2, 1, 2), fake.requests.map { it.second })
+        assertEquals(HomeUiState.Content(listOf(article("first"), article("second"))), viewModel.uiState.value.pageState)
+    }
+
+    @Test
+    fun `category switch restores loaded articles and successful page progress`() = runTest(dispatcher) {
+        val fake = FakeNewsRepository { category, page ->
+            when (category to page) {
+                NewsCategory.GENERAL to 1 -> NewsPageResult.Success(ArticlePage(listOf(article("general-one")), 10))
+                NewsCategory.GENERAL to 2 -> NewsPageResult.Success(ArticlePage(listOf(article("general-two")), 10))
+                NewsCategory.GENERAL to 3 -> NewsPageResult.Success(ArticlePage(listOf(article("general-three")), 1))
+                NewsCategory.TECHNOLOGY to 1 -> NewsPageResult.Success(ArticlePage(listOf(article("technology")), 1))
+                else -> error("Unexpected request: $category/$page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.selectCategory(NewsCategory.TECHNOLOGY)
+        runCurrent()
+        viewModel.selectCategory(NewsCategory.GENERAL)
+        assertEquals(
+            HomeUiState.Content(listOf(article("general-one"), article("general-two"))),
+            viewModel.uiState.value.pageState,
+        )
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2, 1, 3), fake.requests.map { it.second })
+    }
+
+    @Test
+    fun `a short first page and the thousandth article limit stop requests`() = runTest(dispatcher) {
+        val shortPage = FakeNewsRepository { _, page ->
+            if (page == 1) NewsPageResult.Success(ArticlePage(listOf(article("only")), 1))
+            else error("Unexpected page $page")
+        }
+        val shortViewModel = HomeViewModel(shortPage)
+        runCurrent()
+        assertEquals(HomeAppendState.EndReached, shortViewModel.uiState.value.appendState)
+        shortViewModel.loadNextPage()
+        runCurrent()
+        assertEquals(1, shortPage.requests.size)
+
+        val fullPages = FakeNewsRepository { _, page ->
+            NewsPageResult.Success(ArticlePage(listOf(article("article-$page")), 10))
+        }
+        val fullViewModel = HomeViewModel(fullPages)
+        runCurrent()
+        repeat(99) {
+            fullViewModel.loadNextPage()
+            runCurrent()
+        }
+        assertEquals(HomeAppendState.EndReached, fullViewModel.uiState.value.appendState)
+        fullViewModel.loadNextPage()
+        runCurrent()
+        assertEquals(100, fullPages.requests.size)
+        assertEquals(100, (fullViewModel.uiState.value.pageState as HomeUiState.Content).articles.size)
+    }
+
+    @Test
+    fun `partial duplicate page preserves first occurrence order`() = runTest(dispatcher) {
+        val fake = FakeNewsRepository { _, page ->
+            if (page == 1) NewsPageResult.Success(ArticlePage(listOf(article("a"), article("b")), 10))
+            else NewsPageResult.Success(ArticlePage(listOf(article("b"), article("c"), article("a"), article("d")), 4))
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(
+            listOf("a", "b", "c", "d"),
+            (viewModel.uiState.value.pageState as HomeUiState.Content).articles.map { it.id },
+        )
+        assertEquals(HomeAppendState.EndReached, viewModel.uiState.value.appendState)
+    }
+
+    @Test
+    fun `failed refresh after two completed pages retains the third page cursor`() = runTest(dispatcher) {
+        var firstPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> if (++firstPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("one")), 10))
+                    else NewsPageResult.Failure(NewsError.CONNECTION)
+                2 -> NewsPageResult.Success(ArticlePage(listOf(article("two")), 10))
+                3 -> NewsPageResult.Success(ArticlePage(listOf(article("three")), 1))
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        assertEquals(NewsError.CONNECTION, viewModel.uiState.value.refreshError)
+        assertEquals(HomeUiState.Content(listOf(article("one"), article("two"))), viewModel.uiState.value.pageState)
+        viewModel.loadNextPage()
+        runCurrent()
+        assertEquals(listOf(1, 2, 1, 3), fake.requests.map { it.second })
+        assertEquals(
+            HomeUiState.Content(listOf(article("one"), article("two"), article("three"))),
+            viewModel.uiState.value.pageState,
+        )
+    }
+
+    @Test
+    fun `empty refresh clears every previously appended article`() = runTest(dispatcher) {
+        var firstPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> if (++firstPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("one")), 10))
+                    else NewsPageResult.Success(ArticlePage(emptyList(), 0))
+                2 -> NewsPageResult.Success(ArticlePage(listOf(article("two")), 10))
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+
+        assertEquals(HomeUiState.Empty, viewModel.uiState.value.pageState)
+        assertEquals(HomeAppendState.Idle, viewModel.uiState.value.appendState)
+        assertEquals(listOf(1, 2, 1), fake.requests.map { it.second })
+    }
+
+    @Test
+    fun `late failure from cancelled append cannot restore an old footer`() = runTest(dispatcher) {
+        val staleAppend = CompletableDeferred<NewsPageResult>()
+        var firstPageAttempts = 0
+        val fake = FakeNewsRepository { _, page ->
+            when (page) {
+                1 -> if (++firstPageAttempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 10))
+                    else NewsPageResult.Success(ArticlePage(listOf(article("fresh")), 1))
+                2 -> withContext(NonCancellable) { staleAppend.await() }
+                else -> error("Unexpected page $page")
+            }
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        staleAppend.complete(NewsPageResult.Failure(NewsError.TIMEOUT))
+        runCurrent()
+        assertEquals(HomeUiState.Content(listOf(article("fresh"))), viewModel.uiState.value.pageState)
+        assertEquals(HomeAppendState.EndReached, viewModel.uiState.value.appendState)
+        assertEquals(null, viewModel.uiState.value.refreshError)
     }
 
     private fun article(id: String) = Article(id, id, null, null, null, null, null, null)
