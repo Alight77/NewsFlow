@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.home
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.alight77.news.R
 import io.github.alight77.news.domain.model.Article
+import io.github.alight77.news.domain.model.NewsCategory
 import io.github.alight77.news.ui.components.ArticleImage
 import io.github.alight77.news.ui.components.ArticleMeta
 import io.github.alight77.news.ui.components.messageRes
@@ -44,7 +48,19 @@ fun HomeScreen(
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 12.dp),
         )
-        when (val state = uiState) {
+        ScrollableTabRow(
+            selectedTabIndex = NewsCategory.entries.indexOf(uiState.selectedCategory),
+            edgePadding = 12.dp,
+        ) {
+            NewsCategory.entries.forEach { category ->
+                Tab(
+                    selected = uiState.selectedCategory == category,
+                    onClick = { viewModel.selectCategory(category) },
+                    text = { Text(stringResource(category.labelRes())) },
+                )
+            }
+        }
+        when (val state = uiState.pageState) {
             HomeUiState.Loading -> HomeMessage {
                 CircularProgressIndicator()
                 Text(stringResource(R.string.home_loading))
@@ -67,6 +83,15 @@ fun HomeScreen(
             }
         }
     }
+}
+
+@StringRes
+private fun NewsCategory.labelRes(): Int = when (this) {
+    NewsCategory.GENERAL -> R.string.category_general
+    NewsCategory.TECHNOLOGY -> R.string.category_technology
+    NewsCategory.BUSINESS -> R.string.category_business
+    NewsCategory.SCIENCE -> R.string.category_science
+    NewsCategory.HEALTH -> R.string.category_health
 }
 
 @Composable

@@ -11,27 +11,48 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class HomeViewModel(private val repository: NewsRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
+    private val _uiState = MutableStateFlow(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Loading))
     val uiState = _uiState.asStateFlow()
-    private var loadJob: Job? = null
+    private val completedPages = mutableMapOf<NewsCategory, HomeUiState>()
+    private var activeJob: Job? = null
+    private var requestVersion = 0L
 
     init {
-        loadFirstPage()
+        loadFirstPage(NewsCategory.GENERAL)
     }
 
-    fun retry() = loadFirstPage()
+    fun selectCategory(category: NewsCategory) {
+        if (category == _uiState.value.selectedCategory) return
 
-    private fun loadFirstPage() {
-        if (loadJob?.isActive == true) return
-        _uiState.value = HomeUiState.Loading
-        loadJob = viewModelScope.launch {
-            _uiState.value = when (val result = repository.getHeadlines(NewsCategory.GENERAL, page = 1)) {
+        activeJob?.cancel()
+        requestVersion++
+        val completedPage = completedPages[category]
+        _uiState.value = HomeScreenState(category, completedPage ?: HomeUiState.Loading)
+        if (completedPage == null) loadFirstPage(category)
+    }
+
+    fun retry() {
+        if (activeJob?.isActive == true) return
+        loadFirstPage(_uiState.value.selectedCategory)
+    }
+
+    private fun loadFirstPage(category: NewsCategory) {
+        val version = ++requestVersion
+        _uiState.value = HomeScreenState(category, HomeUiState.Loading)
+        activeJob = viewModelScope.launch {
+            val newPageState = when (val result = repository.getHeadlines(category, page = 1)) {
                 is NewsPageResult.Success -> {
                     val articles = result.page.articles
                     if (articles.isEmpty()) HomeUiState.Empty else HomeUiState.Content(articles)
                 }
                 is NewsPageResult.Failure -> HomeUiState.Error(result.error)
             }
+            if (version != requestVersion || _uiState.value.selectedCategory != category) return@launch
+
+            if (newPageState is HomeUiState.Content || newPageState == HomeUiState.Empty) {
+                completedPages[category] = newPageState
+            }
+            _uiState.value = HomeScreenState(category, newPageState)
         }
     }
 }
