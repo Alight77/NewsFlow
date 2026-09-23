@@ -6,6 +6,7 @@ import io.github.alight77.news.domain.model.NewsPageResult
 import io.github.alight77.news.domain.model.ArticlePage
 import io.github.alight77.news.domain.repository.NewsRepository
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -106,6 +107,16 @@ class GNewsRepositoryTest {
 
         assertEquals(
             NewsPageResult.Failure(NewsError.CONNECTION),
+            repository.getHeadlines(NewsCategory.GENERAL, page = 1),
+        )
+    }
+
+    @Test
+    fun `maps a request timeout separately from other connection failures`() = runBlocking {
+        val repository = GNewsRepository(serviceThatThrows(SocketTimeoutException("private timeout detail")))
+
+        assertEquals(
+            NewsPageResult.Failure(NewsError.TIMEOUT),
             repository.getHeadlines(NewsCategory.GENERAL, page = 1),
         )
     }

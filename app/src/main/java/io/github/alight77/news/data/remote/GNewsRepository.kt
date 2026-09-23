@@ -9,6 +9,7 @@ import io.github.alight77.news.domain.model.NewsPageResult
 import io.github.alight77.news.domain.repository.NewsRepository
 import java.io.EOFException
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.concurrent.CancellationException
 import retrofit2.HttpException
 
@@ -45,6 +46,8 @@ class GNewsRepository(private val service: GNewsService) : NewsRepository {
             NewsPageResult.Failure(NewsError.INVALID_DATA)
         } catch (invalidJson: EOFException) {
             NewsPageResult.Failure(NewsError.INVALID_DATA)
+        } catch (timeout: SocketTimeoutException) {
+            NewsPageResult.Failure(NewsError.TIMEOUT)
         } catch (connection: IOException) {
             NewsPageResult.Failure(NewsError.CONNECTION)
         } catch (unknown: Exception) {

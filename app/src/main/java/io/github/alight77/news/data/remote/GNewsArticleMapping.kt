@@ -8,7 +8,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 fun GNewsResponseDto.toArticlePage(): ArticlePage {
     val rawArticles = articles ?: throw InvalidNewsDataException()
-    val mappedArticles = rawArticles.mapNotNull(GNewsArticleDto::toArticleOrNull)
+    val mappedArticles = rawArticles.mapNotNull(GNewsArticleDto::toArticleOrNull).distinctBy(Article::id)
     if (rawArticles.isNotEmpty() && mappedArticles.isEmpty()) {
         throw InvalidNewsDataException()
     }

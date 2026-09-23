@@ -98,6 +98,20 @@ class GNewsArticleMappingTest {
     }
 
     @Test
+    fun `duplicate article keys keep the first article in server order`() {
+        val page = GNewsResponseDto(
+            articles = listOf(
+                GNewsArticleDto(id = "first", title = "Original"),
+                GNewsArticleDto(id = "second", title = "Second"),
+                GNewsArticleDto(id = "first", title = "Updated duplicate"),
+            ),
+        ).toArticlePage()
+
+        assertEquals(3, page.rawArticleCount)
+        assertEquals(listOf("Original", "Second"), page.articles.map { it.title })
+    }
+
+    @Test
     fun `a nonempty page containing only invalid articles is invalid data`() {
         val response = GNewsResponseDto(
             articles = listOf(GNewsArticleDto(id = "news-3", title = "  ")),

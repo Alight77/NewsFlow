@@ -9,12 +9,10 @@ import io.github.alight77.news.ui.components.PlaceholderScreen
 @Composable
 fun FavoritesScreen(
     contentPadding: PaddingValues,
-    onOpenDetail: () -> Unit,
 ) {
     PlaceholderScreen(
         contentPadding = contentPadding,
         title = stringResource(R.string.favorites_title),
         message = stringResource(R.string.favorites_placeholder),
-        onOpenDetail = onOpenDetail,
     )
 }

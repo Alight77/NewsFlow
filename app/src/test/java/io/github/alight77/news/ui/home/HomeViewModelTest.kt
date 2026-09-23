@@ -7,6 +7,7 @@ import io.github.alight77.news.domain.model.NewsError
 import io.github.alight77.news.domain.model.NewsPageResult
 import io.github.alight77.news.domain.repository.NewsRepository
 import java.util.concurrent.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -73,6 +74,43 @@ class HomeViewModelTest {
         runCurrent()
 
         assertEquals(HomeUiState.Error(NewsError.RATE_LIMITED), viewModel.uiState.value)
+    }
+
+    @Test
+    fun `retry repeats the failed first page and recovers to content`() = runTest(dispatcher) {
+        val article = Article("news-1", "Headline", null, null, null, null, null, null)
+        var attempt = 0
+        val fake = FakeNewsRepository {
+            if (++attempt == 1) NewsPageResult.Failure(NewsError.CONNECTION)
+            else NewsPageResult.Success(ArticlePage(listOf(article), 1))
+        }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+        assertEquals(HomeUiState.Error(NewsError.CONNECTION), viewModel.uiState.value)
+
+        viewModel.retry()
+        assertEquals(HomeUiState.Loading, viewModel.uiState.value)
+        runCurrent()
+
+        assertEquals(HomeUiState.Content(listOf(article)), viewModel.uiState.value)
+        assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), fake.requests)
+    }
+
+    @Test
+    fun `repeated retry during an active first page request does not start another request`() = runTest(dispatcher) {
+        val response = CompletableDeferred<NewsPageResult>()
+        val fake = FakeNewsRepository { response.await() }
+        val viewModel = HomeViewModel(fake)
+        runCurrent()
+
+        viewModel.retry()
+        viewModel.retry()
+        runCurrent()
+        assertEquals(listOf(NewsCategory.GENERAL to 1), fake.requests)
+
+        response.complete(NewsPageResult.Success(ArticlePage(emptyList(), 0)))
+        runCurrent()
+        assertEquals(HomeUiState.Empty, viewModel.uiState.value)
     }
 
     @Test

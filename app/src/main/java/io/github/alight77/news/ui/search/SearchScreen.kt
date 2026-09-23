@@ -9,12 +9,10 @@ import io.github.alight77.news.ui.components.PlaceholderScreen
 @Composable
 fun SearchScreen(
     contentPadding: PaddingValues,
-    onOpenDetail: () -> Unit,
 ) {
     PlaceholderScreen(
         contentPadding = contentPadding,
         title = stringResource(R.string.search_title),
         message = stringResource(R.string.search_placeholder),
-        onOpenDetail = onOpenDetail,
     )
 }
