@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
@@ -28,7 +29,9 @@ fun ArticleImage(imageUrl: String?, modifier: Modifier = Modifier) {
             contentScale = ContentScale.Crop,
             modifier = imageModifier,
             loading = { ImageUnavailable(Modifier.fillMaxWidth().height(180.dp)) },
-            error = { ImageUnavailable(Modifier.fillMaxWidth().height(180.dp)) },
+            error = {
+                ImageUnavailable(Modifier.fillMaxWidth().height(180.dp).testTag("image_load_failed"))
+            },
             success = { SubcomposeAsyncImageContent() },
         )
     }
