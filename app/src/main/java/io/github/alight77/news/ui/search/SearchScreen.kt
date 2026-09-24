@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,7 +103,10 @@ private fun SearchScreenContent(
                 Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
             }
             is SearchUiState.Content -> LazyColumn(
-                modifier = Modifier.fillMaxSize().testTag("search_articles"),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .testTag("search_articles"),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -128,10 +132,13 @@ private fun SearchScreenContent(
 }
 
 @Composable
-private fun SearchMessage(content: @Composable () -> Unit) {
+private fun ColumnScope.SearchMessage(content: @Composable () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .padding(24.dp),
+        contentAlignment = Alignment.TopCenter,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,

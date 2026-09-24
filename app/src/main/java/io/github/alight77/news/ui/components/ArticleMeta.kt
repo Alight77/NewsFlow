@@ -1,7 +1,7 @@
 package io.github.alight77.news.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,9 +21,8 @@ fun ArticleMeta(article: Article) {
             .withZone(ZoneId.systemDefault())
             .format(it)
     } ?: stringResource(R.string.unknown_time)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(source, style = MaterialTheme.typography.bodySmall)
-        Text("·", style = MaterialTheme.typography.bodySmall)
         Text(date, style = MaterialTheme.typography.bodySmall)
     }
 }
