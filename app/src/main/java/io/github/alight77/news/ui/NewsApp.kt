@@ -12,9 +12,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -31,18 +37,31 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import io.github.alight77.news.R
+import io.github.alight77.news.domain.model.Article
+import io.github.alight77.news.domain.repository.FavoriteRepository
 import io.github.alight77.news.domain.repository.NewsRepository
 import io.github.alight77.news.ui.article.ArticleDetailScreen
 import io.github.alight77.news.ui.article.ArticleSessionViewModel
 import io.github.alight77.news.ui.favorites.FavoritesScreen
+import io.github.alight77.news.ui.favorites.FavoritesViewModel
 import io.github.alight77.news.ui.home.HomeScreen
 import io.github.alight77.news.ui.home.HomeViewModel
 import io.github.alight77.news.ui.search.SearchScreen
 import io.github.alight77.news.ui.search.SearchViewModel
 import io.github.alight77.news.ui.theme.NewsTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 @Composable
 fun NewsApp(repository: NewsRepository) {
+    NewsApp(repository, EmptyFavoriteRepository)
+}
+
+@Composable
+fun NewsApp(
+    repository: NewsRepository,
+    favoriteRepository: FavoriteRepository,
+) {
     val navController = rememberNavController()
     val articleSession: ArticleSessionViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
@@ -53,14 +72,34 @@ fun NewsApp(repository: NewsRepository) {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = SearchViewModel(repository) as T
     })
+    val favoritesViewModel: FavoritesViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = FavoritesViewModel(favoriteRepository) as T
+    })
+    val favoritesUiState by favoritesViewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val favoriteUpdateFailed = stringResource(R.string.favorite_update_failed)
+    LaunchedEffect(favoritesViewModel, favoriteUpdateFailed) {
+        favoritesViewModel.events.collect {
+            snackbarHostState.showSnackbar(
+                message = favoriteUpdateFailed,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val selectedDestination = bottomNavigationItems.firstOrNull { item ->
         currentDestination?.hierarchy?.any { it.route == item.destination.route } == true
     }?.destination
+    val openArticle: (Article) -> Unit = { article ->
+        articleSession.open(article)
+        navController.navigate("article_detail/${Uri.encode(article.id)}")
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (currentDestination?.route != NewsDestination.Detail.route) {
                 NewsBottomNavigation(
@@ -87,24 +126,29 @@ fun NewsApp(repository: NewsRepository) {
                 HomeScreen(
                     contentPadding = innerPadding,
                     viewModel = homeViewModel,
-                    onOpenDetail = { article ->
-                        articleSession.open(article)
-                        navController.navigate("article_detail/${Uri.encode(article.id)}")
-                    },
+                    favoriteArticleIds = favoritesUiState.favoriteArticleIds,
+                    pendingFavoriteArticleIds = favoritesUiState.pendingArticleIds,
+                    onToggleFavorite = favoritesViewModel::toggle,
+                    onOpenDetail = openArticle,
                 )
             }
             composable(NewsDestination.Search.route) {
                 SearchScreen(
                     contentPadding = innerPadding,
                     viewModel = searchViewModel,
-                    onOpenDetail = { article ->
-                        articleSession.open(article)
-                        navController.navigate("article_detail/${Uri.encode(article.id)}")
-                    },
+                    favoriteArticleIds = favoritesUiState.favoriteArticleIds,
+                    pendingFavoriteArticleIds = favoritesUiState.pendingArticleIds,
+                    onToggleFavorite = favoritesViewModel::toggle,
+                    onOpenDetail = openArticle,
                 )
             }
             composable(NewsDestination.Favorites.route) {
-                FavoritesScreen(contentPadding = innerPadding)
+                FavoritesScreen(
+                    contentPadding = innerPadding,
+                    uiState = favoritesUiState,
+                    onToggleFavorite = favoritesViewModel::toggle,
+                    onOpenDetail = openArticle,
+                )
             }
             composable(
                 route = NewsDestination.Detail.route,
@@ -114,6 +158,9 @@ fun NewsApp(repository: NewsRepository) {
                 ArticleDetailScreen(
                     contentPadding = innerPadding,
                     article = articleSession.articleForDetail(articleId),
+                    favoriteArticleIds = favoritesUiState.favoriteArticleIds,
+                    pendingFavoriteArticleIds = favoritesUiState.pendingArticleIds,
+                    onToggleFavorite = favoritesViewModel::toggle,
                     onNavigateUp = navController::navigateUp,
                 )
             }
@@ -170,4 +217,16 @@ private sealed class NewsDestination(
     data object Search : NewsDestination("search", R.string.nav_search)
     data object Favorites : NewsDestination("favorites", R.string.nav_favorites)
     data object Detail : NewsDestination("article_detail/{articleId}", R.string.detail_title)
+}
+
+private object EmptyFavoriteRepository : FavoriteRepository {
+    override fun observeFavorites(): Flow<List<Article>> = flowOf(emptyList())
+
+    override fun observeFavoriteArticleIds(): Flow<Set<String>> = flowOf(emptySet())
+
+    override suspend fun isFavorite(articleId: String): Boolean = false
+
+    override suspend fun save(article: Article) = Unit
+
+    override suspend fun remove(articleId: String) = Unit
 }

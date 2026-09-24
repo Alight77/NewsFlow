@@ -16,6 +16,11 @@
     <string name="search_empty">没有找到相关新闻。</string>
     <string name="search_first_batch">仅显示首批搜索结果</string>
     <string name="favorites_title">收藏</string>
+    <string name="favorites_empty">还没有收藏新闻。</string>
+    <string name="favorite_add">收藏新闻</string>
+    <string name="favorite_remove">取消收藏</string>
+    <string name="favorite_updating">正在更新收藏…</string>
+    <string name="favorite_update_failed">收藏更新失败，请重试。</string>
     <string name="home_loading">正在加载新闻…</string>
     <string name="home_empty">暂无新闻。</string>
     <string name="home_refresh_failed">刷新失败：%1$s</string>

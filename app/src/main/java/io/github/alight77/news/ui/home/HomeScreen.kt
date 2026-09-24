@@ -47,6 +47,7 @@ import io.github.alight77.news.domain.model.NewsCategory
 import io.github.alight77.news.domain.model.NewsError
 import io.github.alight77.news.ui.components.ArticleImage
 import io.github.alight77.news.ui.components.ArticleMeta
+import io.github.alight77.news.ui.components.FavoriteToggleButton
 import io.github.alight77.news.ui.components.messageRes
 import io.github.alight77.news.ui.theme.NewsTheme
 
@@ -54,6 +55,9 @@ import io.github.alight77.news.ui.theme.NewsTheme
 fun HomeScreen(
     contentPadding: PaddingValues,
     viewModel: HomeViewModel,
+    favoriteArticleIds: Set<String>,
+    pendingFavoriteArticleIds: Set<String>,
+    onToggleFavorite: (Article) -> Unit,
     onOpenDetail: (Article) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -73,6 +77,9 @@ fun HomeScreen(
             onRefresh = viewModel::refresh,
             onLoadNextPage = viewModel::loadNextPage,
             onRetryNextPage = viewModel::retryNextPage,
+            favoriteArticleIds = favoriteArticleIds,
+            pendingFavoriteArticleIds = pendingFavoriteArticleIds,
+            onToggleFavorite = onToggleFavorite,
             onOpenDetail = onOpenDetail,
         )
         SnackbarHost(
@@ -92,6 +99,9 @@ private fun HomeScreenContent(
     onRefresh: () -> Unit,
     onLoadNextPage: () -> Unit,
     onRetryNextPage: () -> Unit,
+    favoriteArticleIds: Set<String>,
+    pendingFavoriteArticleIds: Set<String>,
+    onToggleFavorite: (Article) -> Unit,
     onOpenDetail: (Article) -> Unit,
 ) {
     Column(
@@ -162,7 +172,13 @@ private fun HomeScreenContent(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(state.articles, key = Article::id) { article ->
-                            ArticleCard(article = article, onClick = { onOpenDetail(article) })
+                            ArticleCard(
+                                article = article,
+                                isFavorite = article.id in favoriteArticleIds,
+                                isPendingFavorite = article.id in pendingFavoriteArticleIds,
+                                onToggleFavorite = { onToggleFavorite(article) },
+                                onClick = { onOpenDetail(article) },
+                            )
                         }
                         if (uiState.appendState != HomeAppendState.Idle) {
                             item { AppendFooter(uiState.appendState, onRetryNextPage) }
@@ -241,7 +257,13 @@ private fun RefreshErrorBanner(error: NewsError?, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun ArticleCard(article: Article, onClick: () -> Unit) {
+private fun ArticleCard(
+    article: Article,
+    isFavorite: Boolean,
+    isPendingFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onClick: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column {
             ArticleImage(article.imageUrl, modifier = Modifier.fillMaxWidth())
@@ -249,7 +271,19 @@ private fun ArticleCard(article: Article, onClick: () -> Unit) {
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(article.title, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        article.title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    FavoriteToggleButton(
+                        isFavorite = isFavorite,
+                        isPending = isPendingFavorite,
+                        onClick = onToggleFavorite,
+                        modifier = Modifier.testTag("favorite_action_${article.id}"),
+                    )
+                }
                 ArticleMeta(article)
                 article.description?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
@@ -265,6 +299,7 @@ private fun PreviewHome(
     isRefreshing: Boolean = false,
     refreshError: NewsError? = null,
     appendState: HomeAppendState = HomeAppendState.Idle,
+    favoriteArticleIds: Set<String> = emptySet(),
 ) {
     NewsTheme(dynamicColor = false) {
         Surface(
@@ -279,6 +314,9 @@ private fun PreviewHome(
                 onRefresh = {},
                 onLoadNextPage = {},
                 onRetryNextPage = {},
+                favoriteArticleIds = favoriteArticleIds,
+                pendingFavoriteArticleIds = emptySet(),
+                onToggleFavorite = {},
                 onOpenDetail = {},
             )
         }
@@ -289,7 +327,7 @@ private fun PreviewHome(
 @Preview(name = "Home - content dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun HomeContentPreview() {
-    PreviewHome(previewContent())
+    PreviewHome(previewContent(), favoriteArticleIds = setOf("preview-1"))
 }
 
 @Preview(name = "Home - refreshing", showBackground = true)

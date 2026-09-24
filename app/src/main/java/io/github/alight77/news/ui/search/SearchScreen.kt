@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.NewsError
 import io.github.alight77.news.ui.components.ArticleImage
 import io.github.alight77.news.ui.components.ArticleMeta
+import io.github.alight77.news.ui.components.FavoriteToggleButton
 import io.github.alight77.news.ui.components.messageRes
 import io.github.alight77.news.ui.theme.NewsTheme
 
@@ -39,6 +41,9 @@ import io.github.alight77.news.ui.theme.NewsTheme
 fun SearchScreen(
     contentPadding: PaddingValues,
     viewModel: SearchViewModel,
+    favoriteArticleIds: Set<String>,
+    pendingFavoriteArticleIds: Set<String>,
+    onToggleFavorite: (Article) -> Unit,
     onOpenDetail: (Article) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -47,6 +52,9 @@ fun SearchScreen(
         uiState = uiState,
         onInputChanged = viewModel::updateQuery,
         onRetry = viewModel::retry,
+        favoriteArticleIds = favoriteArticleIds,
+        pendingFavoriteArticleIds = pendingFavoriteArticleIds,
+        onToggleFavorite = onToggleFavorite,
         onOpenDetail = onOpenDetail,
     )
 }
@@ -57,6 +65,9 @@ private fun SearchScreenContent(
     uiState: SearchScreenState,
     onInputChanged: (String) -> Unit,
     onRetry: () -> Unit,
+    favoriteArticleIds: Set<String>,
+    pendingFavoriteArticleIds: Set<String>,
+    onToggleFavorite: (Article) -> Unit,
     onOpenDetail: (Article) -> Unit,
 ) {
     Column(
@@ -103,7 +114,13 @@ private fun SearchScreenContent(
                     )
                 }
                 items(state.articles, key = Article::id) { article ->
-                    SearchArticleCard(article = article, onClick = { onOpenDetail(article) })
+                    SearchArticleCard(
+                        article = article,
+                        isFavorite = article.id in favoriteArticleIds,
+                        isPendingFavorite = article.id in pendingFavoriteArticleIds,
+                        onToggleFavorite = { onToggleFavorite(article) },
+                        onClick = { onOpenDetail(article) },
+                    )
                 }
             }
         }
@@ -126,7 +143,13 @@ private fun SearchMessage(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SearchArticleCard(article: Article, onClick: () -> Unit) {
+private fun SearchArticleCard(
+    article: Article,
+    isFavorite: Boolean,
+    isPendingFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onClick: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column {
             ArticleImage(article.imageUrl, modifier = Modifier.fillMaxWidth())
@@ -134,7 +157,19 @@ private fun SearchArticleCard(article: Article, onClick: () -> Unit) {
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(article.title, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        article.title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    FavoriteToggleButton(
+                        isFavorite = isFavorite,
+                        isPending = isPendingFavorite,
+                        onClick = onToggleFavorite,
+                        modifier = Modifier.testTag("favorite_action_${article.id}"),
+                    )
+                }
                 ArticleMeta(article)
                 article.description?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
@@ -166,6 +201,7 @@ private fun SearchContentPreview() {
             "Android",
             SearchUiState.Content(listOf(previewArticle("android"))),
         ),
+        favoriteArticleIds = setOf("android"),
     )
 }
 
@@ -182,7 +218,10 @@ private fun SearchErrorPreview() {
 }
 
 @Composable
-private fun PreviewSearch(uiState: SearchScreenState) {
+private fun PreviewSearch(
+    uiState: SearchScreenState,
+    favoriteArticleIds: Set<String> = emptySet(),
+) {
     NewsTheme(dynamicColor = false) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             SearchScreenContent(
@@ -190,6 +229,9 @@ private fun PreviewSearch(uiState: SearchScreenState) {
                 uiState = uiState,
                 onInputChanged = {},
                 onRetry = {},
+                favoriteArticleIds = favoriteArticleIds,
+                pendingFavoriteArticleIds = emptySet(),
+                onToggleFavorite = {},
                 onOpenDetail = {},
             )
         }

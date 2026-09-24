@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,7 @@ import io.github.alight77.news.R
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.ui.components.ArticleImage
 import io.github.alight77.news.ui.components.ArticleMeta
+import io.github.alight77.news.ui.components.FavoriteToggleButton
 import io.github.alight77.news.ui.theme.NewsTheme
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -40,6 +42,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 fun ArticleDetailScreen(
     contentPadding: PaddingValues,
     article: Article?,
+    favoriteArticleIds: Set<String>,
+    pendingFavoriteArticleIds: Set<String>,
+    onToggleFavorite: (Article) -> Unit,
     onNavigateUp: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -54,6 +59,16 @@ fun ArticleDetailScreen(
             navigationIcon = {
                 TextButton(onClick = onNavigateUp) {
                     Text(stringResource(R.string.navigate_up))
+                }
+            },
+            actions = {
+                article?.let { currentArticle ->
+                    FavoriteToggleButton(
+                        isFavorite = currentArticle.id in favoriteArticleIds,
+                        isPending = currentArticle.id in pendingFavoriteArticleIds,
+                        onClick = { onToggleFavorite(currentArticle) },
+                        modifier = Modifier.testTag("favorite_action_${currentArticle.id}"),
+                    )
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -153,6 +168,9 @@ private fun ArticleDetailPreview() {
                     publishedAt = null,
                     sourceName = "示例来源",
                 ),
+                favoriteArticleIds = setOf("preview-article"),
+                pendingFavoriteArticleIds = emptySet(),
+                onToggleFavorite = {},
                 onNavigateUp = {},
             )
         }
@@ -170,6 +188,9 @@ private fun ArticleUnavailablePreview() {
             ArticleDetailScreen(
                 contentPadding = PaddingValues(),
                 article = null,
+                favoriteArticleIds = emptySet(),
+                pendingFavoriteArticleIds = emptySet(),
+                onToggleFavorite = {},
                 onNavigateUp = {},
             )
         }
