@@ -12,7 +12,7 @@ class NewsApplication : Application() {
             this,
             NewsDatabase::class.java,
             "news-flow.db",
-        ).build()
+        ).addMigrations(NewsDatabase.MIGRATION_1_2).build()
         RoomFavoriteRepository(database.favoriteArticleDao())
     }
 }
