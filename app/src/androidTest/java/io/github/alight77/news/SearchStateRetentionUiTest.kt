@@ -27,6 +27,7 @@ import io.github.alight77.news.ui.NewsApp
 import io.github.alight77.news.ui.theme.NewsTheme
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Rule
 import org.junit.Test
 
@@ -48,11 +49,13 @@ class SearchStateRetentionUiTest {
         setSearchContent(repository)
         enterSearchAndWaitForResult(repository)
 
+        val previousActivity = activity
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         setSearchContent(repository)
         waitForResultToReturn()
 
+        assertNotSame(previousActivity, activity)
         composeRule.onNodeWithText("Android 搜索结果").assertIsDisplayed()
         assertSearchInputRetained()
         assertEquals(listOf("Android"), repository.queries)
