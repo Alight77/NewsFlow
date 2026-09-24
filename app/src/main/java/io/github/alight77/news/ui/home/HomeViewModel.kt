@@ -34,6 +34,7 @@ class HomeViewModel(
     private var activeJob: Job? = null
     private var requestVersion = 0L
     private var isHomeVisible = false
+    private var hasObservedInitialHomeVisibility = false
 
     init {
         restoreOrLoadFirstPage(NewsCategory.GENERAL)
@@ -59,6 +60,10 @@ class HomeViewModel(
         if (isVisible == isHomeVisible) return
 
         isHomeVisible = isVisible
+        if (isVisible && !hasObservedInitialHomeVisibility) {
+            hasObservedInitialHomeVisibility = true
+            return
+        }
         if (!isVisible || activeJob?.isActive == true) return
 
         val category = _uiState.value.selectedCategory

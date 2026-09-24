@@ -86,6 +86,32 @@ class HomeViewModelCacheTest {
     }
 
     @Test
+    fun `initial Home visibility does not repeat a failed stale empty cache refresh`() = runTest(dispatcher) {
+        val cache = FakeHomeFirstPageCache().apply {
+            pages[NewsCategory.GENERAL] = CachedHomeFirstPage(
+                articles = emptyList(),
+                fetchedAtEpochMillis = now - FRESHNESS_MILLIS,
+            )
+        }
+        val repository = FakeNewsRepository { _, _ -> NewsPageResult.Failure(NewsError.CONNECTION) }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        runCurrent()
+
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        runCurrent()
+
+        assertEquals(
+            HomeScreenState(
+                selectedCategory = NewsCategory.GENERAL,
+                pageState = HomeUiState.Empty,
+                refreshError = NewsError.CONNECTION,
+            ),
+            viewModel.uiState.value,
+        )
+        assertEquals(listOf(NewsCategory.GENERAL to 1), repository.requests)
+    }
+
+    @Test
     fun `cached first page refreshes before an append can request page two`() = runTest(dispatcher) {
         val cached = article("cached")
         val refreshed = article("refreshed")
@@ -278,6 +304,91 @@ class HomeViewModelCacheTest {
         runCurrent()
 
         assertEquals(CachedHomeFirstPage(listOf(fresh), currentTime), cache.pages[NewsCategory.GENERAL])
+    }
+
+    @Test
+    fun `failed refresh after a successful empty result does not restore prior articles`() = runTest(dispatcher) {
+        var currentTime = now
+        val original = article("original")
+        val cache = FakeHomeFirstPageCache()
+        var firstPageRequests = 0
+        val repository = FakeNewsRepository { _, page ->
+            check(page == 1)
+            when (++firstPageRequests) {
+                1 -> NewsPageResult.Success(ArticlePage(listOf(original), 1))
+                2 -> NewsPageResult.Success(ArticlePage(emptyList(), 0))
+                3 -> NewsPageResult.Failure(NewsError.CONNECTION)
+                else -> error("Unexpected first page request")
+            }
+        }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime })
+        runCurrent()
+
+        viewModel.refresh()
+        runCurrent()
+        assertEquals(HomeUiState.Empty, viewModel.uiState.value.pageState)
+        assertEquals(CachedHomeFirstPage(emptyList(), now), cache.pages[NewsCategory.GENERAL])
+
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        viewModel.onHomeVisibilityChanged(isVisible = false)
+        currentTime += FRESHNESS_MILLIS
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        runCurrent()
+
+        assertEquals(
+            HomeScreenState(
+                selectedCategory = NewsCategory.GENERAL,
+                pageState = HomeUiState.Empty,
+                refreshError = NewsError.CONNECTION,
+            ),
+            viewModel.uiState.value,
+        )
+        assertEquals(
+            listOf(
+                NewsCategory.GENERAL to 1,
+                NewsCategory.GENERAL to 1,
+                NewsCategory.GENERAL to 1,
+            ),
+            repository.requests,
+        )
+    }
+
+    @Test
+    fun `retry after an expired empty cache failure requests network and replaces cache`() = runTest(dispatcher) {
+        val fresh = article("fresh")
+        val cache = FakeHomeFirstPageCache().apply {
+            pages[NewsCategory.GENERAL] = CachedHomeFirstPage(
+                articles = emptyList(),
+                fetchedAtEpochMillis = now - FRESHNESS_MILLIS,
+            )
+        }
+        var firstPageRequests = 0
+        val repository = FakeNewsRepository { _, page ->
+            check(page == 1)
+            if (++firstPageRequests == 1) NewsPageResult.Failure(NewsError.CONNECTION)
+            else NewsPageResult.Success(ArticlePage(listOf(fresh), 1))
+        }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        runCurrent()
+
+        assertEquals(
+            HomeScreenState(
+                selectedCategory = NewsCategory.GENERAL,
+                pageState = HomeUiState.Empty,
+                refreshError = NewsError.CONNECTION,
+            ),
+            viewModel.uiState.value,
+        )
+
+        viewModel.retry()
+        runCurrent()
+
+        assertEquals(HomeUiState.Content(listOf(fresh)), viewModel.uiState.value.pageState)
+        assertEquals(CachedHomeFirstPage(listOf(fresh), now), cache.pages[NewsCategory.GENERAL])
+        assertEquals(
+            listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1),
+            repository.requests,
+        )
     }
 
     private class FakeNewsRepository(

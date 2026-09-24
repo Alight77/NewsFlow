@@ -3,7 +3,9 @@ package io.github.alight77.news
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import io.github.alight77.news.domain.model.Article
+import io.github.alight77.news.domain.model.ArticlePage
 import io.github.alight77.news.domain.model.NewsCategory
 import io.github.alight77.news.domain.model.NewsError
 import io.github.alight77.news.domain.model.NewsPageResult
@@ -51,6 +53,40 @@ class HomeCacheUiTest {
 
         composeRule.onNodeWithText(article.title).assertIsDisplayed()
         assertEquals(0, repository.requestCount)
+    }
+
+    @Test
+    fun expiredEmptyHomeCacheShowsRefreshFailureAndCanRetry() {
+        val fresh = Article("fresh-id", "重试后的首页", null, null, null, null, null, "网络来源")
+        val repository = object : NewsRepository {
+            var requestCount = 0
+
+            override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult =
+                if (++requestCount == 1) NewsPageResult.Failure(NewsError.CONNECTION)
+                else NewsPageResult.Success(ArticlePage(listOf(fresh), 1))
+        }
+        val cache = object : HomeFirstPageCache {
+            override suspend fun read(category: NewsCategory): CachedHomeFirstPage =
+                CachedHomeFirstPage(emptyList(), fetchedAtEpochMillis = 0)
+
+            override suspend fun replace(
+                category: NewsCategory,
+                articles: List<Article>,
+                fetchedAtEpochMillis: Long,
+            ) = Unit
+        }
+        composeRule.setContent {
+            NewsTheme {
+                NewsApp(repository, EmptyFavoriteRepository, cache)
+            }
+        }
+
+        composeRule.onNodeWithText("暂无新闻。").assertIsDisplayed()
+        composeRule.onNodeWithText("刷新失败：网络连接失败，请检查网络后重试。").assertIsDisplayed()
+        composeRule.onNodeWithText("重试刷新").performClick()
+
+        composeRule.onNodeWithText(fresh.title).assertIsDisplayed()
+        assertEquals(2, repository.requestCount)
     }
 
     private object EmptyFavoriteRepository : FavoriteRepository {
