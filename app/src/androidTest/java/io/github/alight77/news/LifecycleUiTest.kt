@@ -13,13 +13,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.Lifecycle
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.ArticlePage
@@ -39,7 +40,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class LifecycleUiTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private lateinit var activity: Activity
 
@@ -128,12 +129,8 @@ class LifecycleUiTest {
         composeRule.waitUntil(3_000) { searchRequests.get() == 1 }
         composeRule.onNodeWithText("Android 搜索结果").assertIsDisplayed()
 
-        val foregroundActivity = activity
-        composeRule.runOnIdle { assertTrue(foregroundActivity.moveTaskToBack(true)) }
-        val resumeIntent = Intent(foregroundActivity, foregroundActivity.javaClass).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-        }
-        InstrumentationRegistry.getInstrumentation().targetContext.startActivity(resumeIntent)
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         composeRule.onNodeWithText("Android 搜索结果").assertIsDisplayed()
         composeRule.onNodeWithText("首页").performClick()
         composeRule.onNodeWithText("首页新闻").assertIsDisplayed()
