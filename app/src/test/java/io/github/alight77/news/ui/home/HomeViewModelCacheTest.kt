@@ -157,6 +157,129 @@ class HomeViewModelCacheTest {
         assertEquals(listOf(NewsCategory.TECHNOLOGY to 1), repository.requests)
     }
 
+    @Test
+    fun `returning to Home refreshes expired memory once without reading disk`() = runTest(dispatcher) {
+        var currentTime = now
+        val old = article("old")
+        val fresh = article("fresh")
+        var firstPageRequests = 0
+        val cache = FakeHomeFirstPageCache()
+        val repository = FakeNewsRepository { _, page ->
+            check(page == 1)
+            if (++firstPageRequests == 1) NewsPageResult.Success(ArticlePage(listOf(old), 10))
+            else NewsPageResult.Success(ArticlePage(listOf(fresh), 1))
+        }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime })
+        runCurrent()
+
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        viewModel.onHomeVisibilityChanged(isVisible = false)
+        currentTime += FRESHNESS_MILLIS
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        runCurrent()
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        runCurrent()
+
+        assertEquals(HomeUiState.Content(listOf(fresh)), viewModel.uiState.value.pageState)
+        assertEquals(listOf(NewsCategory.GENERAL to 1, NewsCategory.GENERAL to 1), repository.requests)
+        assertEquals(listOf(NewsCategory.GENERAL), cache.readCategories)
+    }
+
+    @Test
+    fun `fresh memory is retained while an explicit refresh still requests network`() = runTest(dispatcher) {
+        val cached = article("cached")
+        val refreshed = article("refreshed")
+        val cache = FakeHomeFirstPageCache().apply {
+            pages[NewsCategory.GENERAL] = CachedHomeFirstPage(listOf(cached), now)
+        }
+        val repository = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(refreshed), 1)) }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        runCurrent()
+
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        viewModel.onHomeVisibilityChanged(isVisible = false)
+        viewModel.onHomeVisibilityChanged(isVisible = true)
+        runCurrent()
+        assertEquals(emptyList<Pair<NewsCategory, Int>>(), repository.requests)
+
+        viewModel.refresh()
+        runCurrent()
+        assertEquals(HomeUiState.Content(listOf(refreshed)), viewModel.uiState.value.pageState)
+        assertEquals(listOf(NewsCategory.GENERAL to 1), repository.requests)
+    }
+
+    @Test
+    fun `returning to a multi page category keeps memory and does not reread cache`() = runTest(dispatcher) {
+        val first = article("first")
+        val second = article("second")
+        val technology = article("technology")
+        val cache = FakeHomeFirstPageCache()
+        val repository = FakeNewsRepository { category, page ->
+            when (category to page) {
+                NewsCategory.GENERAL to 1 -> NewsPageResult.Success(ArticlePage(listOf(first), 10))
+                NewsCategory.GENERAL to 2 -> NewsPageResult.Success(ArticlePage(listOf(second), 1))
+                NewsCategory.TECHNOLOGY to 1 -> NewsPageResult.Success(ArticlePage(listOf(technology), 1))
+                else -> error("Unexpected request: $category/$page")
+            }
+        }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        runCurrent()
+        viewModel.loadNextPage()
+        runCurrent()
+
+        viewModel.selectCategory(NewsCategory.TECHNOLOGY)
+        runCurrent()
+        viewModel.selectCategory(NewsCategory.GENERAL)
+        runCurrent()
+
+        assertEquals(HomeUiState.Content(listOf(first, second)), viewModel.uiState.value.pageState)
+        assertEquals(listOf(NewsCategory.GENERAL, NewsCategory.TECHNOLOGY), cache.readCategories)
+    }
+
+    @Test
+    fun `late same category cache write cannot win over a newer first page`() = runTest(dispatcher) {
+        var currentTime = now
+        val old = article("old")
+        val fresh = article("fresh")
+        val technology = article("technology")
+        val firstWriteStarted = CompletableDeferred<Unit>()
+        val releaseFirstWrite = CompletableDeferred<Unit>()
+        var generalFirstPageRequests = 0
+        var generalWrites = 0
+        val cache = FakeHomeFirstPageCache().apply {
+            replaceBlock = { category, articles, fetchedAtEpochMillis ->
+                if (category == NewsCategory.GENERAL && generalWrites++ == 0) {
+                    firstWriteStarted.complete(Unit)
+                    withContext(NonCancellable) { releaseFirstWrite.await() }
+                }
+                pages[category] = CachedHomeFirstPage(articles, fetchedAtEpochMillis)
+            }
+        }
+        val repository = FakeNewsRepository { category, page ->
+            when (category to page) {
+                NewsCategory.GENERAL to 1 -> {
+                    if (++generalFirstPageRequests == 1) NewsPageResult.Success(ArticlePage(listOf(old), 1))
+                    else NewsPageResult.Success(ArticlePage(listOf(fresh), 1))
+                }
+                NewsCategory.TECHNOLOGY to 1 -> NewsPageResult.Success(ArticlePage(listOf(technology), 1))
+                else -> error("Unexpected request: $category/$page")
+            }
+        }
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime })
+        runCurrent()
+        firstWriteStarted.await()
+
+        viewModel.selectCategory(NewsCategory.TECHNOLOGY)
+        runCurrent()
+        currentTime += FRESHNESS_MILLIS
+        viewModel.selectCategory(NewsCategory.GENERAL)
+        runCurrent()
+        releaseFirstWrite.complete(Unit)
+        runCurrent()
+
+        assertEquals(CachedHomeFirstPage(listOf(fresh), currentTime), cache.pages[NewsCategory.GENERAL])
+    }
+
     private class FakeNewsRepository(
         private val response: suspend (NewsCategory, Int) -> NewsPageResult,
     ) : NewsRepository {
@@ -170,10 +293,17 @@ class HomeViewModelCacheTest {
 
     private class FakeHomeFirstPageCache : HomeFirstPageCache {
         val pages = mutableMapOf<NewsCategory, CachedHomeFirstPage>()
+        val readCategories = mutableListOf<NewsCategory>()
         var readBlock: suspend (NewsCategory) -> CachedHomeFirstPage? = { pages[it] }
         var replaceFailure: Throwable? = null
+        var replaceBlock: suspend (NewsCategory, List<Article>, Long) -> Unit = { category, articles, fetchedAtEpochMillis ->
+            pages[category] = CachedHomeFirstPage(articles, fetchedAtEpochMillis)
+        }
 
-        override suspend fun read(category: NewsCategory): CachedHomeFirstPage? = readBlock(category)
+        override suspend fun read(category: NewsCategory): CachedHomeFirstPage? {
+            readCategories += category
+            return readBlock(category)
+        }
 
         override suspend fun replace(
             category: NewsCategory,
@@ -181,7 +311,7 @@ class HomeViewModelCacheTest {
             fetchedAtEpochMillis: Long,
         ) {
             replaceFailure?.let { throw it }
-            pages[category] = CachedHomeFirstPage(articles, fetchedAtEpochMillis)
+            replaceBlock(category, articles, fetchedAtEpochMillis)
         }
     }
 

@@ -33,6 +33,7 @@ class HomeViewModel(
     private val cacheWriteMutex = Mutex()
     private var activeJob: Job? = null
     private var requestVersion = 0L
+    private var isHomeVisible = false
 
     init {
         restoreOrLoadFirstPage(NewsCategory.GENERAL)
@@ -51,6 +52,19 @@ class HomeViewModel(
             if (completedPage.isExpired(currentTimeMillis())) {
                 startRefresh(category, completedPage, emitRefreshSucceeded = false)
             }
+        }
+    }
+
+    fun onHomeVisibilityChanged(isVisible: Boolean) {
+        if (isVisible == isHomeVisible) return
+
+        isHomeVisible = isVisible
+        if (!isVisible || activeJob?.isActive == true) return
+
+        val category = _uiState.value.selectedCategory
+        val completedPage = completedPages[category] ?: return
+        if (completedPage.isExpired(currentTimeMillis())) {
+            startRefresh(category, completedPage, emitRefreshSucceeded = false)
         }
     }
 

@@ -102,6 +102,9 @@ fun NewsApp(
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    LaunchedEffect(currentDestination?.route) {
+        homeViewModel.onHomeVisibilityChanged(currentDestination?.route == NewsDestination.Home.route)
+    }
     val selectedDestination = bottomNavigationItems.firstOrNull { item ->
         currentDestination?.hierarchy?.any { it.route == item.destination.route } == true
     }?.destination
