@@ -31,6 +31,11 @@ data class HomeFirstPageCacheMetadataEntity(
     val fetchedAtEpochMillis: Long,
 )
 
+data class HomeFirstPageCacheSnapshot(
+    val articles: List<HomeFirstPageArticleEntity>,
+    val fetchedAtEpochMillis: Long,
+)
+
 @Dao
 abstract class HomeFirstPageCacheDao {
     @Query(
@@ -41,6 +46,15 @@ abstract class HomeFirstPageCacheDao {
 
     @Query("SELECT * FROM home_first_page_cache_metadata WHERE categoryApiValue = :categoryApiValue LIMIT 1")
     abstract suspend fun getMetadata(categoryApiValue: String): HomeFirstPageCacheMetadataEntity?
+
+    @Transaction
+    open suspend fun read(categoryApiValue: String): HomeFirstPageCacheSnapshot? {
+        val metadata = getMetadata(categoryApiValue) ?: return null
+        return HomeFirstPageCacheSnapshot(
+            articles = getArticles(categoryApiValue),
+            fetchedAtEpochMillis = metadata.fetchedAtEpochMillis,
+        )
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun insertArticles(articles: List<HomeFirstPageArticleEntity>)
