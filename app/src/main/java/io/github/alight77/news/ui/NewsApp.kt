@@ -38,7 +38,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import io.github.alight77.news.R
 import io.github.alight77.news.domain.model.Article
+import io.github.alight77.news.domain.model.NewsCategory
+import io.github.alight77.news.domain.repository.CachedHomeFirstPage
 import io.github.alight77.news.domain.repository.FavoriteRepository
+import io.github.alight77.news.domain.repository.HomeFirstPageCache
 import io.github.alight77.news.domain.repository.NewsRepository
 import io.github.alight77.news.ui.article.ArticleDetailScreen
 import io.github.alight77.news.ui.article.ArticleSessionViewModel
@@ -54,7 +57,7 @@ import kotlinx.coroutines.flow.flowOf
 
 @Composable
 fun NewsApp(repository: NewsRepository) {
-    NewsApp(repository, EmptyFavoriteRepository)
+    NewsApp(repository, EmptyFavoriteRepository, EmptyHomeFirstPageCache)
 }
 
 @Composable
@@ -62,11 +65,21 @@ fun NewsApp(
     repository: NewsRepository,
     favoriteRepository: FavoriteRepository,
 ) {
+    NewsApp(repository, favoriteRepository, EmptyHomeFirstPageCache)
+}
+
+@Composable
+fun NewsApp(
+    repository: NewsRepository,
+    favoriteRepository: FavoriteRepository,
+    homeFirstPageCache: HomeFirstPageCache,
+) {
     val navController = rememberNavController()
     val articleSession: ArticleSessionViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = HomeViewModel(repository) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            HomeViewModel(repository, homeFirstPageCache) as T
     })
     val searchViewModel: SearchViewModel = viewModel(factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -229,4 +242,14 @@ private object EmptyFavoriteRepository : FavoriteRepository {
     override suspend fun save(article: Article) = Unit
 
     override suspend fun remove(articleId: String) = Unit
+}
+
+private object EmptyHomeFirstPageCache : HomeFirstPageCache {
+    override suspend fun read(category: NewsCategory): CachedHomeFirstPage? = null
+
+    override suspend fun replace(
+        category: NewsCategory,
+        articles: List<Article>,
+        fetchedAtEpochMillis: Long,
+    ) = Unit
 }

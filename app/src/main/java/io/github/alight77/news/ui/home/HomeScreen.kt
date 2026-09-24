@@ -131,9 +131,12 @@ private fun HomeScreenContent(
                 CircularProgressIndicator()
                 Text(stringResource(R.string.home_loading))
             }
-            HomeUiState.Empty -> HomeMessage {
-                Text(stringResource(R.string.home_empty))
-                Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+            HomeUiState.Empty -> {
+                RefreshErrorBanner(uiState.refreshError, onRefresh)
+                HomeMessage {
+                    Text(stringResource(R.string.home_empty))
+                    Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+                }
             }
             is HomeUiState.Error -> HomeMessage {
                 Text(stringResource(state.error.messageRes()))

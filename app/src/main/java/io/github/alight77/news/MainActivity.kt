@@ -29,10 +29,10 @@ class MainActivity : ComponentActivity() {
         } else {
             GNewsRepository(GNewsNetworkClient.create().create(GNewsService::class.java))
         }
-        val favoriteRepository = (application as NewsApplication).favoriteRepository
+        val application = application as NewsApplication
         setContent {
             NewsTheme {
-                NewsApp(repository, favoriteRepository)
+                NewsApp(repository, application.favoriteRepository, application.homeFirstPageCache)
             }
         }
     }
