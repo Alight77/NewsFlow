@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.home
 
+import androidx.lifecycle.SavedStateHandle
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.ArticlePage
 import io.github.alight77.news.domain.model.NewsCategory
@@ -50,7 +51,7 @@ class HomeViewModelCacheTest {
         }
         val repository = FakeNewsRepository { _, _ -> error("Fresh cache must not request network") }
 
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         assertEquals(
@@ -71,7 +72,7 @@ class HomeViewModelCacheTest {
         }
         val repository = FakeNewsRepository { _, _ -> NewsPageResult.Failure(NewsError.CONNECTION) }
 
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         assertEquals(
@@ -94,7 +95,7 @@ class HomeViewModelCacheTest {
             )
         }
         val repository = FakeNewsRepository { _, _ -> NewsPageResult.Failure(NewsError.CONNECTION) }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.onHomeVisibilityChanged(isVisible = true)
@@ -126,7 +127,7 @@ class HomeViewModelCacheTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.loadNextPage()
@@ -148,7 +149,7 @@ class HomeViewModelCacheTest {
         }
         val repository = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(fresh), 1)) }
 
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         assertEquals(HomeUiState.Content(listOf(fresh)), viewModel.uiState.value.pageState)
@@ -170,7 +171,7 @@ class HomeViewModelCacheTest {
             if (category == NewsCategory.TECHNOLOGY) NewsPageResult.Success(ArticlePage(listOf(technology), 1))
             else error("General must wait for cache before requesting network")
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.selectCategory(NewsCategory.TECHNOLOGY)
@@ -195,7 +196,7 @@ class HomeViewModelCacheTest {
             if (++firstPageRequests == 1) NewsPageResult.Success(ArticlePage(listOf(old), 10))
             else NewsPageResult.Success(ArticlePage(listOf(fresh), 1))
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.onHomeVisibilityChanged(isVisible = true)
@@ -219,7 +220,7 @@ class HomeViewModelCacheTest {
             pages[NewsCategory.GENERAL] = CachedHomeFirstPage(listOf(cached), now)
         }
         val repository = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(refreshed), 1)) }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.onHomeVisibilityChanged(isVisible = true)
@@ -248,7 +249,7 @@ class HomeViewModelCacheTest {
                 else -> error("Unexpected request: $category/$page")
             }
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -291,7 +292,7 @@ class HomeViewModelCacheTest {
                 else -> error("Unexpected request: $category/$page")
             }
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime }, savedStateHandle = SavedStateHandle())
         runCurrent()
         firstWriteStarted.await()
 
@@ -321,7 +322,7 @@ class HomeViewModelCacheTest {
                 else -> error("Unexpected first page request")
             }
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { currentTime }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.refresh()
@@ -368,7 +369,7 @@ class HomeViewModelCacheTest {
             if (++firstPageRequests == 1) NewsPageResult.Failure(NewsError.CONNECTION)
             else NewsPageResult.Success(ArticlePage(listOf(fresh), 1))
         }
-        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now })
+        val viewModel = HomeViewModel(repository, cache, currentTimeMillis = { now }, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         assertEquals(

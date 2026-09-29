@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.home
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.alight77.news.domain.model.Article
@@ -24,8 +25,12 @@ class HomeViewModel(
     private val repository: NewsRepository,
     private val homeFirstPageCache: HomeFirstPageCache = EmptyHomeFirstPageCache,
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Loading))
+    private val initialCategory = NewsCategory.entries.firstOrNull {
+        it.name == savedStateHandle.get<String>(SELECTED_CATEGORY_KEY)
+    } ?: NewsCategory.GENERAL
+    private val _uiState = MutableStateFlow(HomeScreenState(initialCategory, HomeUiState.Loading))
     val uiState = _uiState.asStateFlow()
     private val _refreshSucceeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val refreshSucceeded = _refreshSucceeded.asSharedFlow()
@@ -37,12 +42,13 @@ class HomeViewModel(
     private var hasObservedInitialHomeVisibility = false
 
     init {
-        restoreOrLoadFirstPage(NewsCategory.GENERAL)
+        restoreOrLoadFirstPage(initialCategory)
     }
 
     fun selectCategory(category: NewsCategory) {
         if (category == _uiState.value.selectedCategory) return
 
+        savedStateHandle[SELECTED_CATEGORY_KEY] = category.name
         activeJob?.cancel()
         requestVersion++
         val completedPage = completedPages[category]
@@ -290,6 +296,7 @@ class HomeViewModel(
     }
 
     private companion object {
+        const val SELECTED_CATEGORY_KEY = "selected_category"
         const val PAGE_SIZE = 10
         const val MAX_ACCESSIBLE_ARTICLES = 1000
         const val FRESHNESS_MILLIS = 2 * 60 * 60 * 1_000L

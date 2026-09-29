@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.home
 
+import androidx.lifecycle.SavedStateHandle
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.ArticlePage
 import io.github.alight77.news.domain.model.NewsCategory
@@ -51,7 +52,7 @@ class HomeViewModelTest {
             sourceName = null,
         )
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(article), 10)) }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
 
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Loading), viewModel.uiState.value)
         runCurrent()
@@ -61,9 +62,37 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `restored category loads its first page without requesting general`() = runTest(dispatcher) {
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(emptyList(), 0)) }
+        val savedState = SavedStateHandle(mapOf("selected_category" to NewsCategory.TECHNOLOGY.name))
+
+        val viewModel = HomeViewModel(fake, savedStateHandle = savedState)
+        runCurrent()
+
+        assertEquals(NewsCategory.TECHNOLOGY, viewModel.uiState.value.selectedCategory)
+        assertEquals(listOf(NewsCategory.TECHNOLOGY to 1), fake.requests)
+    }
+
+    @Test
+    fun `category selection saves the value needed by a new view model`() = runTest(dispatcher) {
+        val savedState = SavedStateHandle()
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(emptyList(), 0)) }
+        val viewModel = HomeViewModel(fake, savedStateHandle = savedState)
+        runCurrent()
+
+        viewModel.selectCategory(NewsCategory.SCIENCE)
+        runCurrent()
+
+        assertEquals(NewsCategory.SCIENCE.name, savedState.get<String>("selected_category"))
+        val restored = HomeViewModel(fake, savedStateHandle = savedState)
+        runCurrent()
+        assertEquals(NewsCategory.SCIENCE, restored.uiState.value.selectedCategory)
+    }
+
+    @Test
     fun `an empty first page moves to empty state`() = runTest(dispatcher) {
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(emptyList(), 0)) }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
 
         runCurrent()
 
@@ -73,7 +102,7 @@ class HomeViewModelTest {
     @Test
     fun `a failed first page exposes only a business error`() = runTest(dispatcher) {
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Failure(NewsError.RATE_LIMITED) }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
 
         runCurrent()
 
@@ -88,7 +117,7 @@ class HomeViewModelTest {
             if (++attempt == 1) NewsPageResult.Failure(NewsError.CONNECTION)
             else NewsPageResult.Success(ArticlePage(listOf(article), 10))
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         assertEquals(HomeScreenState(NewsCategory.GENERAL, HomeUiState.Error(NewsError.CONNECTION)), viewModel.uiState.value)
 
@@ -104,7 +133,7 @@ class HomeViewModelTest {
     fun `repeated retry during an active first page request does not start another request`() = runTest(dispatcher) {
         val response = CompletableDeferred<NewsPageResult>()
         val fake = FakeNewsRepository { _, _ -> response.await() }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.retry()
@@ -120,7 +149,7 @@ class HomeViewModelTest {
     @Test
     fun `a cancelled request does not become an error state`() = runTest(dispatcher) {
         val fake = FakeNewsRepository { _, _ -> throw CancellationException("stale request") }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
 
         runCurrent()
 
@@ -135,7 +164,7 @@ class HomeViewModelTest {
             val result = if (category == NewsCategory.GENERAL) general else technology
             NewsPageResult.Success(ArticlePage(listOf(result), 10))
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.selectCategory(NewsCategory.TECHNOLOGY)
@@ -157,7 +186,7 @@ class HomeViewModelTest {
                 else ArticlePage(listOf(article("technology")), 10),
             )
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.selectCategory(NewsCategory.TECHNOLOGY)
         runCurrent()
@@ -179,7 +208,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected category: $category")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.selectCategory(NewsCategory.TECHNOLOGY)
         runCurrent()
@@ -209,7 +238,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected category: $category")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.selectCategory(NewsCategory.TECHNOLOGY)
         runCurrent()
@@ -241,7 +270,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected category: $category")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.selectCategory(NewsCategory.BUSINESS)
         runCurrent()
@@ -279,7 +308,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected category: $category")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.selectCategory(NewsCategory.SCIENCE)
         runCurrent()
@@ -302,7 +331,7 @@ class HomeViewModelTest {
             if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 10))
             else refreshed.await()
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.refresh()
@@ -325,7 +354,7 @@ class HomeViewModelTest {
     fun `successful refresh emits feedback even when articles are unchanged`() = runTest(dispatcher) {
         val original = article("original")
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(original), 10)) }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         val successEvents = mutableListOf<Unit>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -349,7 +378,7 @@ class HomeViewModelTest {
             if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(original), 10))
             else NewsPageResult.Failure(NewsError.CONNECTION)
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.refresh()
@@ -377,7 +406,7 @@ class HomeViewModelTest {
                 else -> retry.await()
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.refresh()
         runCurrent()
@@ -405,7 +434,7 @@ class HomeViewModelTest {
             if (++attempts == 1) NewsPageResult.Success(ArticlePage(listOf(article("old")), 10))
             else NewsPageResult.Success(ArticlePage(emptyList(), 0))
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.refresh()
@@ -423,7 +452,7 @@ class HomeViewModelTest {
         val fake = FakeNewsRepository { _, _ ->
             if (++attempts == 1) initial.await() else refreshed.await()
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.refresh()
@@ -462,7 +491,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected category: $category")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.selectCategory(NewsCategory.TECHNOLOGY)
         runCurrent()
@@ -492,7 +521,7 @@ class HomeViewModelTest {
             if (page == 1) NewsPageResult.Success(ArticlePage(listOf(article("first")), 10))
             else pendingPage.await()
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.loadNextPage()
@@ -534,7 +563,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.loadNextPage()
@@ -564,7 +593,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.loadNextPage()
@@ -597,7 +626,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -626,7 +655,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -657,7 +686,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -687,7 +716,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected request: $category/$page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -710,7 +739,7 @@ class HomeViewModelTest {
             if (page == 1) NewsPageResult.Success(ArticlePage(listOf(article("only")), 1))
             else error("Unexpected page $page")
         }
-        val shortViewModel = HomeViewModel(shortPage)
+        val shortViewModel = HomeViewModel(shortPage, savedStateHandle = SavedStateHandle())
         runCurrent()
         assertEquals(HomeAppendState.EndReached, shortViewModel.uiState.value.appendState)
         shortViewModel.loadNextPage()
@@ -720,7 +749,7 @@ class HomeViewModelTest {
         val fullPages = FakeNewsRepository { _, page ->
             NewsPageResult.Success(ArticlePage(listOf(article("article-$page")), 10))
         }
-        val fullViewModel = HomeViewModel(fullPages)
+        val fullViewModel = HomeViewModel(fullPages, savedStateHandle = SavedStateHandle())
         runCurrent()
         repeat(99) {
             fullViewModel.loadNextPage()
@@ -739,7 +768,7 @@ class HomeViewModelTest {
             if (page == 1) NewsPageResult.Success(ArticlePage(listOf(article("a"), article("b")), 10))
             else NewsPageResult.Success(ArticlePage(listOf(article("b"), article("c"), article("a"), article("d")), 4))
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
 
         viewModel.loadNextPage()
@@ -763,7 +792,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -792,7 +821,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()
@@ -817,7 +846,7 @@ class HomeViewModelTest {
                 else -> error("Unexpected page $page")
             }
         }
-        val viewModel = HomeViewModel(fake)
+        val viewModel = HomeViewModel(fake, savedStateHandle = SavedStateHandle())
         runCurrent()
         viewModel.loadNextPage()
         runCurrent()

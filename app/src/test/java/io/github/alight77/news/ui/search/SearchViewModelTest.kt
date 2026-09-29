@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.search
 
+import androidx.lifecycle.SavedStateHandle
 import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.ArticlePage
 import io.github.alight77.news.domain.model.NewsCategory
@@ -40,7 +41,7 @@ class SearchViewModelTest {
     fun `a nonblank query trims input and waits 400 milliseconds before its first request`() = runTest(dispatcher) {
         val article = article("android")
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(article), 1)) }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery(" Android ")
 
@@ -63,10 +64,48 @@ class SearchViewModelTest {
     }
 
     @Test
+    fun `restored query searches once only when the screen becomes visible`() = runTest(dispatcher) {
+        val savedState = SavedStateHandle(mapOf("search_input" to " Android "))
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(article("android")), 1)) }
+        val viewModel = SearchViewModel(fake, savedState)
+        runCurrent()
+
+        assertEquals(" Android ", viewModel.uiState.value.input)
+        assertEquals(emptyList<String>(), fake.queries)
+
+        viewModel.onSearchVisible()
+        viewModel.onSearchVisible()
+        runCurrent()
+        viewModel.onSearchVisible()
+
+        assertEquals(listOf("Android"), fake.queries)
+        assertEquals(SearchUiState.Content(listOf(article("android"))), viewModel.uiState.value.resultState)
+    }
+
+    @Test
+    fun `query edits and clearing are saved for a new view model`() = runTest(dispatcher) {
+        val savedState = SavedStateHandle()
+        val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(emptyList(), 0)) }
+        val viewModel = SearchViewModel(fake, savedState)
+
+        viewModel.updateQuery("Android")
+        viewModel.updateQuery(" Android ")
+        assertEquals(" Android ", savedState.get<String>("search_input"))
+
+        val restored = SearchViewModel(fake, savedState)
+        assertEquals(" Android ", restored.uiState.value.input)
+        assertEquals("Android", restored.uiState.value.normalizedQuery)
+
+        viewModel.updateQuery("   ")
+        assertEquals("   ", savedState.get<String>("search_input"))
+        assertEquals("", SearchViewModel(fake, savedState).uiState.value.normalizedQuery)
+    }
+
+    @Test
     fun `blank input clears old content immediately and never calls search`() = runTest(dispatcher) {
         val pending = CompletableDeferred<NewsPageResult>()
         val fake = FakeNewsRepository { _, _ -> withContext(NonCancellable) { pending.await() } }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -92,7 +131,7 @@ class SearchViewModelTest {
                 }
             }
         }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -114,7 +153,7 @@ class SearchViewModelTest {
     @Test
     fun `the same normalized query does not start another automatic request`() = runTest(dispatcher) {
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(listOf(article("android")), 1)) }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -135,7 +174,7 @@ class SearchViewModelTest {
             if (++attempts == 1) NewsPageResult.Failure(NewsError.TIMEOUT)
             else NewsPageResult.Success(ArticlePage(listOf(article), 1))
         }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -153,7 +192,7 @@ class SearchViewModelTest {
     @Test
     fun `an empty successful page maps to the empty state`() = runTest(dispatcher) {
         val fake = FakeNewsRepository { _, _ -> NewsPageResult.Success(ArticlePage(emptyList(), 0)) }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -170,7 +209,7 @@ class SearchViewModelTest {
             if (page == 1) NewsPageResult.Success(ArticlePage(listOf(first), 10))
             else NewsPageResult.Success(ArticlePage(listOf(second), 1))
         }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -193,7 +232,7 @@ class SearchViewModelTest {
             if (page == 1) NewsPageResult.Success(ArticlePage(listOf(first), 10))
             else withContext(NonCancellable) { pending.await() }
         }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -224,7 +263,7 @@ class SearchViewModelTest {
                 else -> NewsPageResult.Success(ArticlePage(listOf(article("third")), 1))
             }
         }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)
@@ -251,7 +290,7 @@ class SearchViewModelTest {
                 else -> NewsPageResult.Success(ArticlePage(listOf(article("kotlin")), 1))
             }
         }
-        val viewModel = SearchViewModel(fake)
+        val viewModel = SearchViewModel(fake, SavedStateHandle())
 
         viewModel.updateQuery("Android")
         advanceTimeBy(400)

@@ -52,6 +52,7 @@ fun SearchScreen(
     onOpenDetail: (Article) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    LaunchedEffect(viewModel) { viewModel.onSearchVisible() }
     SearchScreenContent(
         contentPadding = contentPadding,
         uiState = uiState,

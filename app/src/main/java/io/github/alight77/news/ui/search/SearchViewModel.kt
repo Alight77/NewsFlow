@@ -1,5 +1,6 @@
 package io.github.alight77.news.ui.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.alight77.news.domain.model.Article
@@ -11,21 +12,42 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
-    private val _uiState = MutableStateFlow(SearchScreenState())
+class SearchViewModel(
+    private val repository: NewsRepository,
+    private val savedStateHandle: SavedStateHandle,
+) : ViewModel() {
+    private val restoredInput = savedStateHandle.get<String>(SEARCH_INPUT_KEY).orEmpty()
+    private val _uiState = MutableStateFlow(
+        SearchScreenState(input = restoredInput, normalizedQuery = restoredInput.trim()),
+    )
     val uiState = _uiState.asStateFlow()
     private var activeJob: Job? = null
     private var requestVersion = 0L
     private var nextPage: Int? = null
 
+    fun onSearchVisible() {
+        val currentState = _uiState.value
+        if (currentState.normalizedQuery.isEmpty() || currentState.resultState != SearchUiState.Initial) return
+
+        val version = ++requestVersion
+        _uiState.value = currentState.copy(resultState = SearchUiState.Loading)
+        activeJob = viewModelScope.launch {
+            searchFirstPage(currentState.normalizedQuery, version)
+        }
+    }
+
     fun updateQuery(input: String) {
         val normalizedQuery = input.trim()
         val currentState = _uiState.value
         if (normalizedQuery == currentState.normalizedQuery) {
-            if (input != currentState.input) _uiState.value = currentState.copy(input = input)
+            if (input != currentState.input) {
+                savedStateHandle[SEARCH_INPUT_KEY] = input
+                _uiState.value = currentState.copy(input = input)
+            }
             return
         }
 
+        savedStateHandle[SEARCH_INPUT_KEY] = input
         activeJob?.cancel()
         val version = ++requestVersion
         nextPage = null
@@ -123,6 +145,7 @@ class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
         if (rawCount < PAGE_SIZE || page * PAGE_SIZE >= MAX_ACCESSIBLE_ARTICLES) null else page + 1
 
     private companion object {
+        const val SEARCH_INPUT_KEY = "search_input"
         const val AUTOMATIC_SEARCH_DEBOUNCE_MILLIS = 400L
         const val PAGE_SIZE = 10
         const val MAX_ACCESSIBLE_ARTICLES = 1000

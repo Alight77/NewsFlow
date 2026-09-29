@@ -27,7 +27,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -78,12 +80,13 @@ fun NewsApp(
     val articleSession: ArticleSessionViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel(factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            HomeViewModel(repository, homeFirstPageCache) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+            HomeViewModel(repository, homeFirstPageCache, savedStateHandle = extras.createSavedStateHandle()) as T
     })
     val searchViewModel: SearchViewModel = viewModel(factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = SearchViewModel(repository) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+            SearchViewModel(repository, extras.createSavedStateHandle()) as T
     })
     val favoritesViewModel: FavoritesViewModel = viewModel(factory = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
