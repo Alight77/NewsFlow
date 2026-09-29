@@ -7,5 +7,5 @@ import io.github.alight77.news.domain.model.NewsPageResult
 interface NewsRepository {
     suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult
 
-    suspend fun search(query: String): NewsPageResult = NewsPageResult.Failure(NewsError.UNKNOWN)
+    suspend fun search(query: String, page: Int = 1): NewsPageResult = NewsPageResult.Failure(NewsError.UNKNOWN)
 }

@@ -2,6 +2,7 @@ package io.github.alight77.news.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.alight77.news.domain.model.Article
 import io.github.alight77.news.domain.model.NewsPageResult
 import io.github.alight77.news.domain.repository.NewsRepository
 import kotlinx.coroutines.Job
@@ -15,6 +16,7 @@ class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
     val uiState = _uiState.asStateFlow()
     private var activeJob: Job? = null
     private var requestVersion = 0L
+    private var nextPage: Int? = null
 
     fun updateQuery(input: String) {
         val normalizedQuery = input.trim()
@@ -26,6 +28,7 @@ class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
 
         activeJob?.cancel()
         val version = ++requestVersion
+        nextPage = null
         if (normalizedQuery.isEmpty()) {
             _uiState.value = SearchScreenState(input = input)
             return
@@ -34,7 +37,7 @@ class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
         _uiState.value = SearchScreenState(input, normalizedQuery, SearchUiState.Loading)
         activeJob = viewModelScope.launch {
             delay(AUTOMATIC_SEARCH_DEBOUNCE_MILLIS)
-            search(normalizedQuery, version)
+            searchFirstPage(normalizedQuery, version)
         }
     }
 
@@ -44,19 +47,66 @@ class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
 
         activeJob?.cancel()
         val version = ++requestVersion
+        nextPage = null
         _uiState.value = currentState.copy(resultState = SearchUiState.Loading)
         activeJob = viewModelScope.launch {
-            search(currentState.normalizedQuery, version)
+            searchFirstPage(currentState.normalizedQuery, version)
         }
     }
 
-    private suspend fun search(query: String, version: Long) {
-        when (val result = repository.search(query)) {
+    fun loadNextPage() = appendNextPage(explicit = false)
+
+    fun retryNextPage() = appendNextPage(explicit = true)
+
+    private fun appendNextPage(explicit: Boolean) {
+        val currentState = _uiState.value
+        val content = currentState.resultState as? SearchUiState.Content ?: return
+        if (activeJob?.isActive == true) return
+        val page = nextPage ?: return
+        val allowed = if (explicit) {
+            currentState.appendState is SearchAppendState.Error || currentState.appendState == SearchAppendState.ManualContinue
+        } else {
+            currentState.appendState == SearchAppendState.Idle
+        }
+        if (!allowed) return
+
+        val query = currentState.normalizedQuery
+        val version = ++requestVersion
+        _uiState.value = currentState.copy(appendState = SearchAppendState.Loading)
+        activeJob = viewModelScope.launch {
+            when (val result = repository.search(query, page)) {
+                is NewsPageResult.Success -> {
+                    if (!isCurrent(query, version)) return@launch
+                    val articles = (content.articles + result.page.articles).distinctBy(Article::id)
+                    nextPage = nextPageAfter(page, result.page.rawArticleCount)
+                    val appendState = when {
+                        nextPage == null -> SearchAppendState.EndReached
+                        articles.size == content.articles.size -> SearchAppendState.ManualContinue
+                        else -> SearchAppendState.Idle
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        resultState = SearchUiState.Content(articles),
+                        appendState = appendState,
+                    )
+                }
+                is NewsPageResult.Failure -> {
+                    if (!isCurrent(query, version)) return@launch
+                    _uiState.value = _uiState.value.copy(appendState = SearchAppendState.Error(result.error))
+                }
+            }
+        }
+    }
+
+    private suspend fun searchFirstPage(query: String, version: Long) {
+        when (val result = repository.search(query, page = 1)) {
             is NewsPageResult.Success -> {
                 if (!isCurrent(query, version)) return
+                nextPage = if (result.page.articles.isEmpty()) null else nextPageAfter(1, result.page.rawArticleCount)
                 _uiState.value = _uiState.value.copy(
                     resultState = if (result.page.articles.isEmpty()) SearchUiState.Empty
                     else SearchUiState.Content(result.page.articles),
+                    appendState = if (nextPage == null && result.page.articles.isNotEmpty()) SearchAppendState.EndReached
+                    else SearchAppendState.Idle,
                 )
             }
             is NewsPageResult.Failure -> {
@@ -69,7 +119,12 @@ class SearchViewModel(private val repository: NewsRepository) : ViewModel() {
     private fun isCurrent(query: String, version: Long): Boolean =
         version == requestVersion && _uiState.value.normalizedQuery == query
 
+    private fun nextPageAfter(page: Int, rawCount: Int): Int? =
+        if (rawCount < PAGE_SIZE || page * PAGE_SIZE >= MAX_ACCESSIBLE_ARTICLES) null else page + 1
+
     private companion object {
         const val AUTOMATIC_SEARCH_DEBOUNCE_MILLIS = 400L
+        const val PAGE_SIZE = 10
+        const val MAX_ACCESSIBLE_ARTICLES = 1000
     }
 }

@@ -61,7 +61,7 @@ class FavoritesUiTest {
             override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult =
                 NewsPageResult.Success(ArticlePage(listOf(article), 1))
 
-            override suspend fun search(query: String): NewsPageResult =
+            override suspend fun search(query: String, page: Int): NewsPageResult =
                 NewsPageResult.Success(ArticlePage(listOf(article), 1))
         }
         composeRule.setContent { NewsTheme { NewsApp(newsRepository, favoriteRepository) } }

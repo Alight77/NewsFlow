@@ -28,9 +28,10 @@ class GNewsRepository(private val service: GNewsService) : NewsRepository {
         }
     }
 
-    override suspend fun search(query: String): NewsPageResult {
+    override suspend fun search(query: String, page: Int): NewsPageResult {
         val normalizedQuery = query.trim()
         require(normalizedQuery.isNotEmpty()) { "Search query must not be blank." }
+        require(page >= 1) { "Page must be positive." }
 
         return request {
             service.search(
@@ -38,7 +39,7 @@ class GNewsRepository(private val service: GNewsService) : NewsRepository {
                 lang = LANGUAGE,
                 country = COUNTRY,
                 max = PAGE_SIZE,
-                page = FIRST_PAGE,
+                page = page,
             )
         }
     }
@@ -79,6 +80,5 @@ class GNewsRepository(private val service: GNewsService) : NewsRepository {
         const val LANGUAGE = "zh"
         const val COUNTRY = "cn"
         const val PAGE_SIZE = 10
-        const val FIRST_PAGE = 1
     }
 }

@@ -71,6 +71,22 @@ class GNewsRepositoryTest {
     }
 
     @Test
+    fun `searches a requested page with the same query and fixed GNews parameters`() = runBlocking {
+        server.enqueue(MockResponse().setBody(validResponse))
+
+        val result = networkRepository().search(" Android ", page = 2)
+
+        assertTrue(result is NewsPageResult.Success)
+        val request = server.takeRequest()
+        assertEquals("/api/v4/search", request.requestUrl!!.encodedPath)
+        assertEquals("Android", request.requestUrl!!.queryParameter("q"))
+        assertEquals("zh", request.requestUrl!!.queryParameter("lang"))
+        assertEquals("cn", request.requestUrl!!.queryParameter("country"))
+        assertEquals("10", request.requestUrl!!.queryParameter("max"))
+        assertEquals("2", request.requestUrl!!.queryParameter("page"))
+    }
+
+    @Test
     fun `an empty remote page remains a successful empty page`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"totalArticles":0,"articles":[]}"""))
 
@@ -163,6 +179,16 @@ class GNewsRepositoryTest {
 
         assertThrows(IllegalArgumentException::class.java) {
             runBlocking { repository.search("  ") }
+        }
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `rejects an invalid search page before making a request`() {
+        val repository = networkRepository()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repository.search("Android", page = 0) }
         }
         assertEquals(0, server.requestCount)
     }

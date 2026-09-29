@@ -75,7 +75,7 @@ class ErrorBoundaryUiTest {
             override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult =
                 NewsPageResult.Success(ArticlePage(emptyList(), 0))
 
-            override suspend fun search(query: String): NewsPageResult {
+            override suspend fun search(query: String, page: Int): NewsPageResult {
                 assertEquals("Android", query)
                 return when (searchAttempts.incrementAndGet()) {
                     1 -> NewsPageResult.Failure(NewsError.RATE_LIMITED)

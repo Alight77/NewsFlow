@@ -114,7 +114,7 @@ class LifecycleUiTest {
                 )
             }
 
-            override suspend fun search(query: String): NewsPageResult {
+            override suspend fun search(query: String, page: Int): NewsPageResult {
                 searchRequests.incrementAndGet()
                 return NewsPageResult.Success(
                     ArticlePage(listOf(Article("search", "$query 搜索结果", null, null, null, null, null, null)), 1),

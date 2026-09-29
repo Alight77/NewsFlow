@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,8 +22,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -53,6 +57,8 @@ fun SearchScreen(
         uiState = uiState,
         onInputChanged = viewModel::updateQuery,
         onRetry = viewModel::retry,
+        onLoadNextPage = viewModel::loadNextPage,
+        onRetryNextPage = viewModel::retryNextPage,
         favoriteArticleIds = favoriteArticleIds,
         pendingFavoriteArticleIds = pendingFavoriteArticleIds,
         onToggleFavorite = onToggleFavorite,
@@ -66,6 +72,8 @@ private fun SearchScreenContent(
     uiState: SearchScreenState,
     onInputChanged: (String) -> Unit,
     onRetry: () -> Unit,
+    onLoadNextPage: () -> Unit,
+    onRetryNextPage: () -> Unit,
     favoriteArticleIds: Set<String>,
     pendingFavoriteArticleIds: Set<String>,
     onToggleFavorite: (Article) -> Unit,
@@ -102,31 +110,74 @@ private fun SearchScreenContent(
                 Text(stringResource(state.error.messageRes()))
                 Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
             }
-            is SearchUiState.Content -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .testTag("search_articles"),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
-                    Text(
-                        text = stringResource(R.string.search_first_batch),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            is SearchUiState.Content -> {
+                val listState = rememberLazyListState()
+                val articleCount by rememberUpdatedState(state.articles.size)
+                val loadNextPage by rememberUpdatedState(onLoadNextPage)
+                LaunchedEffect(listState, uiState.normalizedQuery) {
+                    var requestedDuringScroll = false
+                    snapshotFlow {
+                        Pair(
+                            listState.isScrollInProgress,
+                            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                        )
+                    }.collect { (scrolling, lastVisibleIndex) ->
+                        if (!scrolling) requestedDuringScroll = false
+                        else if (!requestedDuringScroll && lastVisibleIndex >= articleCount - 2) {
+                            requestedDuringScroll = true
+                            loadNextPage()
+                        }
+                    }
                 }
-                items(state.articles, key = Article::id) { article ->
-                    SearchArticleCard(
-                        article = article,
-                        isFavorite = article.id in favoriteArticleIds,
-                        isPendingFavorite = article.id in pendingFavoriteArticleIds,
-                        onToggleFavorite = { onToggleFavorite(article) },
-                        onClick = { onOpenDetail(article) },
-                    )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .testTag("search_articles"),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.articles, key = Article::id) { article ->
+                        SearchArticleCard(
+                            article = article,
+                            isFavorite = article.id in favoriteArticleIds,
+                            isPendingFavorite = article.id in pendingFavoriteArticleIds,
+                            onToggleFavorite = { onToggleFavorite(article) },
+                            onClick = { onOpenDetail(article) },
+                        )
+                    }
+                    item { SearchAppendFooter(uiState.appendState, onLoadNextPage, onRetryNextPage) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchAppendFooter(state: SearchAppendState, onLoadNextPage: () -> Unit, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).testTag("search_append"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        when (state) {
+            SearchAppendState.Idle -> Button(onClick = onLoadNextPage) {
+                Text(stringResource(R.string.search_load_more))
+            }
+            SearchAppendState.Loading -> {
+                CircularProgressIndicator()
+                Text(stringResource(R.string.search_loading_more))
+            }
+            is SearchAppendState.Error -> {
+                Text(stringResource(R.string.search_append_failed, stringResource(state.error.messageRes())))
+                Button(onClick = onRetry) { Text(stringResource(R.string.search_retry_append)) }
+            }
+            SearchAppendState.ManualContinue -> {
+                Text(stringResource(R.string.search_no_new_articles))
+                Button(onClick = onRetry) { Text(stringResource(R.string.search_continue_append)) }
+            }
+            SearchAppendState.EndReached -> Text(stringResource(R.string.search_end_reached))
         }
     }
 }
@@ -207,8 +258,48 @@ private fun SearchContentPreview() {
             "Android",
             "Android",
             SearchUiState.Content(listOf(previewArticle("android"))),
+            SearchAppendState.EndReached,
         ),
         favoriteArticleIds = setOf("android"),
+    )
+}
+
+@Preview(name = "Search loading more", showBackground = true)
+@Composable
+private fun SearchAppendLoadingPreview() {
+    PreviewSearch(
+        SearchScreenState(
+            "Android", "Android", SearchUiState.Content(listOf(previewArticle("android"))), SearchAppendState.Loading,
+        ),
+    )
+}
+
+@Preview(name = "Search load more failed", showBackground = true)
+@Preview(name = "Search load more failed dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SearchAppendErrorPreview() {
+    PreviewSearch(
+        SearchScreenState(
+            "Android", "Android", SearchUiState.Content(listOf(previewArticle("android"))),
+            SearchAppendState.Error(NewsError.CONNECTION),
+        ),
+    )
+}
+
+@Preview(name = "Search load more", showBackground = true)
+@Composable
+private fun SearchAppendIdlePreview() {
+    PreviewSearch(SearchScreenState("Android", "Android", SearchUiState.Content(listOf(previewArticle("android")))))
+}
+
+@Preview(name = "Search continue after duplicates", showBackground = true)
+@Composable
+private fun SearchAppendManualPreview() {
+    PreviewSearch(
+        SearchScreenState(
+            "Android", "Android", SearchUiState.Content(listOf(previewArticle("android"))),
+            SearchAppendState.ManualContinue,
+        ),
     )
 }
 
@@ -236,6 +327,8 @@ private fun PreviewSearch(
                 uiState = uiState,
                 onInputChanged = {},
                 onRetry = {},
+                onLoadNextPage = {},
+                onRetryNextPage = {},
                 favoriteArticleIds = favoriteArticleIds,
                 pendingFavoriteArticleIds = emptySet(),
                 onToggleFavorite = {},

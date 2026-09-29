@@ -7,7 +7,16 @@ data class SearchScreenState(
     val input: String = "",
     val normalizedQuery: String = "",
     val resultState: SearchUiState = SearchUiState.Initial,
+    val appendState: SearchAppendState = SearchAppendState.Idle,
 )
+
+sealed interface SearchAppendState {
+    data object Idle : SearchAppendState
+    data object Loading : SearchAppendState
+    data class Error(val error: NewsError) : SearchAppendState
+    data object ManualContinue : SearchAppendState
+    data object EndReached : SearchAppendState
+}
 
 sealed interface SearchUiState {
     data object Initial : SearchUiState

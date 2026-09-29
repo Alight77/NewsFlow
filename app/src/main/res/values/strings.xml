@@ -14,7 +14,13 @@
     <string name="search_initial">输入关键词后自动搜索</string>
     <string name="search_loading">正在搜索…</string>
     <string name="search_empty">没有找到相关新闻。</string>
-    <string name="search_first_batch">仅显示首批搜索结果</string>
+    <string name="search_loading_more">正在加载更多搜索结果…</string>
+    <string name="search_load_more">加载更多搜索结果</string>
+    <string name="search_append_failed">加载更多失败：%1$s</string>
+    <string name="search_retry_append">重试加载</string>
+    <string name="search_no_new_articles">这一页没有新结果</string>
+    <string name="search_continue_append">继续加载下一页</string>
+    <string name="search_end_reached">没有更多搜索结果</string>
     <string name="favorites_title">收藏</string>
     <string name="favorites_empty">还没有收藏新闻。</string>
     <string name="favorite_add">收藏新闻</string>

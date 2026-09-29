@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
                 override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult =
                     NewsPageResult.Failure(NewsError.AUTHENTICATION)
 
-                override suspend fun search(query: String): NewsPageResult =
+                override suspend fun search(query: String, page: Int): NewsPageResult =
                     NewsPageResult.Failure(NewsError.AUTHENTICATION)
             }
         } else {

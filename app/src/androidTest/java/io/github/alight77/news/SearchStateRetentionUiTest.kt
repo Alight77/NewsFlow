@@ -4,6 +4,7 @@ import android.content.pm.ActivityInfo
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.SideEffect
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.test.assertIsDisplayed
@@ -12,7 +13,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -32,13 +33,13 @@ import org.junit.Rule
 import org.junit.Test
 
 class SearchStateRetentionUiTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private lateinit var activity: Activity
 
     @After
     fun resetOrientation() {
-        if (::activity.isInitialized) {
+        if (::activity.isInitialized && !activity.isDestroyed) {
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
@@ -50,9 +51,10 @@ class SearchStateRetentionUiTest {
         enterSearchAndWaitForResult(repository)
 
         val previousActivity = activity
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        composeRule.runOnIdle { previousActivity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         setSearchContent(repository)
+        composeRule.waitUntil(5_000) { activity !== previousActivity }
         waitForResultToReturn()
 
         assertNotSame(previousActivity, activity)
@@ -111,7 +113,7 @@ private class FakeSearchRepository : NewsRepository {
     override suspend fun getHeadlines(category: NewsCategory, page: Int): NewsPageResult =
         NewsPageResult.Success(ArticlePage(emptyList(), 0))
 
-    override suspend fun search(query: String): NewsPageResult {
+    override suspend fun search(query: String, page: Int): NewsPageResult {
         queries += query
         return NewsPageResult.Success(
             ArticlePage(
