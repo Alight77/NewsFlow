@@ -362,6 +362,7 @@ class HomeCategoryUiTest {
         composeRule.onNodeWithText("first story 1").assertIsDisplayed()
 
         val priorThirdPageAttempts = requests.count { it == 3 }
+        composeRule.onNodeWithTag("home_articles").performScrollToNode(hasText("second page story"))
         composeRule.onNodeWithTag("home_articles").performTouchInput { swipeUp() }
         composeRule.waitUntil(5_000) { requests.count { it == 3 } > priorThirdPageAttempts }
         composeRule.onNodeWithTag("home_articles").performScrollToNode(hasText("second page story"))
