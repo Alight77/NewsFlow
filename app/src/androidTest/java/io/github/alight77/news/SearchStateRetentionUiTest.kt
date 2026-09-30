@@ -53,6 +53,7 @@ class SearchStateRetentionUiTest {
         val previousActivity = activity
         composeRule.runOnIdle { previousActivity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        composeRule.waitUntil(5_000) { composeRule.activity !== previousActivity }
         setSearchContent(repository)
         composeRule.waitUntil(5_000) { activity !== previousActivity }
         waitForResultToReturn()

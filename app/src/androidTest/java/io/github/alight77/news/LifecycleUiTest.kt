@@ -222,6 +222,7 @@ class LifecycleUiTest {
         val previousActivity = activity
         composeRule.runOnIdle { previousActivity.requestedOrientation = orientation }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        composeRule.waitUntil(5_000) { composeRule.activity !== previousActivity }
         setNewsContent(repository)
         composeRule.waitUntil(5_000) { activity !== previousActivity }
         assertNotSame(previousActivity, activity)
