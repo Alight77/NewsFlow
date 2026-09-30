@@ -2,11 +2,14 @@
 
 一个使用 Kotlin、Jetpack Compose、Retrofit 和 Room 实现的中文新闻聚合阅读 App。项目以“完成一个可解释、可测试的网络数据闭环”为目标，重点处理请求竞争、Refresh / Pagination 状态、网络错误映射、Remote + Local 数据组合与受控缓存，而不是单纯完成一次 REST API 调用。
 
+**当前交付版本：V1.0。** 本版本包含 Home 与 Search 结果分页，以及 Home 分类和 Search 输入的轻量级进程恢复。
+
 ## 功能概览
 
 - 首页聚合 `综合 / 科技 / 商业 / 科学 / 健康` 五类中文新闻。
 - 支持下拉刷新与手写分页；分页加载、失败重试、尾页和重复数据分别建模，已有内容不会因追加失败被清空。
-- 支持中文关键词自动搜索，包含空白输入过滤、`400 ms` debounce、旧请求取消与 latest-wins 结果保护。
+- 支持中文关键词自动搜索与结果分页，包含空白输入过滤、`400 ms` debounce、旧请求取消、latest-wins 结果保护和追加失败重试。
+- 进程被系统回收且任务状态可恢复时，保留 Home 当前分类和 Search 输入词；列表内容按既有缓存与请求规则重新加载。
 - 新闻详情展示标题、来源、发布时间、摘要和内容预览，并可跳转浏览器查看原文。
 - 支持 Home、Search、Detail、Favorites 多入口收藏；收藏快照通过 Room 持久化，可离线查看。
 - 按分类缓存最近一次成功获取的首页第一页；缓存可先展示，再根据 `2 h` freshness 规则决定是否刷新网络。
@@ -63,6 +66,7 @@ Home 分类切换和 Search 连续输入都会产生“旧请求晚于新请求�
 Home 同时使用 `Job.cancel()`、单调递增的 `requestVersion` 和当前 `NewsCategory` 校验；Search 使用 `Job.cancel()`、`requestVersion` 与规范化 Query 校验。即使底层调用没有及时响应取消，失效结果仍不能覆盖当前页面状态。
 
 Search 对 `trim()` 后的 Query 进行比较，空白输入不会请求网络；有效输入等待 `400 ms` 后再发起自动搜索，重复的规范化 Query 不产生无意义请求。
+切换 Query 会立即废弃旧搜索及旧分页结果；追加失败保留已有结果并重试同一页。结果较短无法滚动时，也可以手动加载下一页。
 
 ### Loading、Refresh 与 Pagination 状态分离
 
@@ -86,7 +90,7 @@ Refresh 失败只记录非阻断错误，原列表继续显示；分页失败只
 
 ### 手写分页与动态数据去重
 
-V1 使用手写 Pagination，以显式处理页码、并发请求、失败重试、去重和尾页判断。
+V1.0 的 Home 与 Search 都使用手写 Pagination，以显式处理页码、并发请求、失败重试、去重和尾页判断。
 
 - GNews 每页请求 `10` 条；
 - 文章根据稳定的 `Article.id` 去重；
@@ -186,7 +190,7 @@ Favorites 与 Home Cache 使用不同表和不同生命周期：缓存可以被�
 
 详情路由只传递 `articleId`，打开文章时由 `ArticleSessionViewModel` 保存当前会话的 Article snapshot；旋转后可以继续恢复详情，而不把完整 Article 序列化进 Navigation Route。
 
-当前只保证配置变更和 App Session 内的状态恢复，不把完整 Process Death 恢复作为 V1 范围。
+进程被系统回收且任务状态可恢复时，`SavedStateHandle` 保存 Home 当前分类与 Search 输入词。Home 继续按该分类的首屏缓存与网络规则恢复，Search 在页面重新出现时查询第一页；完整分页列表、精确滚动位置和详情快照不做进程恢复保证。
 
 ## 项目结构
 
@@ -253,8 +257,8 @@ Gradle 在构建时读取该值并生成 `BuildConfig.GNEWS_API_KEY`；如果 Ke
 为了保持项目范围聚焦、网络数据主线清晰，当前不引入以下内容：
 
 - Hilt、复杂 MVI、多模块拆分或为简单操作机械增加 UseCase；
-- Paging 3 / RemoteMediator；V1 保留手写 Home Pagination，用于完整展示分页状态和请求控制；
-- Search Pagination、完整多页持久化缓存和完整 Offline First；
+- Paging 3 / RemoteMediator；目前 Home 和 Search 均保留手写 Pagination，用于完整展示分页状态和请求控制；
+- Search 结果及 Home 后续页的持久化缓存、完整 Offline First；
 - 登录、账号系统、评论、推荐算法、Push、视频流或云端收藏同步；
 - 抓取第三方新闻网页全文；详情只展示 API 可获得的内容预览，并跳转原文；
 - Process Death 后完整分页列表 / 详情快照恢复；
